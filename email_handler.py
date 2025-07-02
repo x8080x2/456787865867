@@ -180,48 +180,10 @@ class EmailHandler:
 
         # HTML content with the specified link
         html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Test</title>
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        <h1 style="color: #2c3e50; margin-bottom: 10px;">📧 Email Delivery Test</h1>
-        <p style="margin-bottom: 0; color: #666;">This is a test email sent via Telegram Email Tester Bot</p>
-    </div>
-
-    <div style="background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 20px;">
-        <h2 style="color: #495057; margin-top: 0;">Test Link</h2>
-        <p>Click the button below to test the HTML link functionality:</p>
-
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
-        </div>
-
+<a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
         <p style="font-size: 14px; color: #6c757d;">
-            <strong>Link Details:</strong><br>
             • URL: https://{self.custom_domain}<br>
-            • Target: _blank (opens in new tab)<br>
-            • Style: Blue background, white text, bold font
-        </p>
-    </div>
-
-    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
-        <h3 style="color: #155724; margin-top: 0;">✅ Test Results</h3>
-        <p style="color: #155724; margin-bottom: 0;">
-            If you received this email, your SMTP configuration is working correctly!
-        </p>
-    </div>
-
-    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
-        <p>This email was sent by Telegram Email Tester Bot</p>
-        <p>Timestamp: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
-    </div>
-</body>
-</html>
+        </p> <p>Timestamp: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
         """
 
         # Plain text version for clients that don't support HTML
