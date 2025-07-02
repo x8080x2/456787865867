@@ -199,3 +199,130 @@ def validate_email_list(emails: list) -> Dict[str, Any]:
         'valid_count': len(valid_emails),
         'invalid_count': len(invalid_emails)
     }
+"""
+Validation module for the Telegram Email Tester Bot
+Contains validation functions for emails and SMTP configurations
+"""
+
+import re
+from typing import Dict, List, Any
+
+def validate_email(email: str) -> bool:
+    """Validate a single email address"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email.strip()) is not None
+
+def validate_email_list(emails: List[str]) -> Dict[str, Any]:
+    """Validate a list of email addresses"""
+    if not emails:
+        return {
+            'valid': False,
+            'error': 'No email addresses provided',
+            'valid_count': 0,
+            'invalid_count': 0,
+            'valid_emails': [],
+            'invalid_emails': []
+        }
+    
+    if len(emails) > 100:
+        return {
+            'valid': False,
+            'error': 'Too many email addresses. Maximum 100 emails allowed per test.',
+            'valid_count': 0,
+            'invalid_count': len(emails),
+            'valid_emails': [],
+            'invalid_emails': emails
+        }
+    
+    valid_emails = []
+    invalid_emails = []
+    
+    for email in emails:
+        if validate_email(email):
+            valid_emails.append(email)
+        else:
+            invalid_emails.append(email)
+    
+    return {
+        'valid': len(valid_emails) > 0,
+        'error': None if len(valid_emails) > 0 else 'No valid email addresses found',
+        'valid_count': len(valid_emails),
+        'invalid_count': len(invalid_emails),
+        'valid_emails': valid_emails,
+        'invalid_emails': invalid_emails
+    }
+
+def validate_smtp_config(smtp_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate SMTP configuration"""
+    required_fields = ['host', 'port', 'username', 'password']
+    
+    # Check required fields
+    for field in required_fields:
+        if field not in smtp_config:
+            return {
+                'valid': False,
+                'error': f'Missing required field: {field}'
+            }
+    
+    # Validate host
+    if not isinstance(smtp_config['host'], str) or not smtp_config['host'].strip():
+        return {
+            'valid': False,
+            'error': 'Host must be a non-empty string'
+        }
+    
+    # Validate port
+    try:
+        port = int(smtp_config['port'])
+        if port < 1 or port > 65535:
+            return {
+                'valid': False,
+                'error': 'Port must be between 1 and 65535'
+            }
+    except (ValueError, TypeError):
+        return {
+            'valid': False,
+            'error': 'Port must be a valid integer'
+        }
+    
+    # Validate username (should be email format)
+    if not validate_email(smtp_config['username']):
+        return {
+            'valid': False,
+            'error': 'Username must be a valid email address'
+        }
+    
+    # Validate password
+    if not isinstance(smtp_config['password'], str) or not smtp_config['password']:
+        return {
+            'valid': False,
+            'error': 'Password must be a non-empty string'
+        }
+    
+    # Validate TLS/SSL settings (optional)
+    use_tls = smtp_config.get('use_tls', True)
+    use_ssl = smtp_config.get('use_ssl', False)
+    
+    if not isinstance(use_tls, bool):
+        return {
+            'valid': False,
+            'error': 'use_tls must be a boolean value'
+        }
+    
+    if not isinstance(use_ssl, bool):
+        return {
+            'valid': False,
+            'error': 'use_ssl must be a boolean value'
+        }
+    
+    # Both TLS and SSL cannot be enabled at the same time
+    if use_tls and use_ssl:
+        return {
+            'valid': False,
+            'error': 'Cannot use both TLS and SSL simultaneously'
+        }
+    
+    return {
+        'valid': True,
+        'error': None
+    }

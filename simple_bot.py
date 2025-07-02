@@ -307,6 +307,7 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
                 
             except Exception as e:
                 logger.error(f"Error in bot loop: {e}")
+                logger.exception("Full traceback:")
                 await asyncio.sleep(5)  # Wait longer on error
 
 async def main():
