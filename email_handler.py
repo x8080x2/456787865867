@@ -46,15 +46,19 @@ class EmailHandler:
         """Fast SMTP connection test with optimized timeout"""
         server = None
         try:
-            if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.host, self.port, timeout=10)
+            # Special handling for iCloud SMTP
+            if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
+                server.starttls()  # iCloud requires STARTTLS
+            elif self.use_ssl:
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
             else:
-                server = smtplib.SMTP(self.host, self.port, timeout=10)
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
                 if self.use_tls:
                     server.starttls()
 
-            # Set shorter timeout for login
-            server.sock.settimeout(8)
+            # Set timeout for login
+            server.sock.settimeout(12)
             server.login(self.username, self.password)
             
             return {
@@ -112,15 +116,18 @@ class EmailHandler:
 
         try:
             # Establish SMTP connection with timeout
-            if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
+            if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+                server = smtplib.SMTP(self.host, self.port, timeout=20)
+                server.starttls()  # iCloud requires STARTTLS
+            elif self.use_ssl:
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
             else:
-                server = smtplib.SMTP(self.host, self.port, timeout=15)
+                server = smtplib.SMTP(self.host, self.port, timeout=20)
                 if self.use_tls:
                     server.starttls()
 
-            # Set shorter timeout for operations
-            server.sock.settimeout(10)
+            # Set timeout for operations
+            server.sock.settimeout(15)
             server.login(self.username, self.password)
 
             # Send emails in batches for better performance

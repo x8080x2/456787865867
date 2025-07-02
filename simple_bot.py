@@ -328,7 +328,7 @@ class SimpleTelegramBot:
             
             # Check if this line has SMTP config (server, port, username, password)
             words = line_without_emails.split()
-            if len(words) >= 4:  # At least server, port, username, password
+            if len(words) >= 3:  # At least server, port, some other info
                 smtp_line = line
                 break
         
@@ -336,24 +336,8 @@ class SimpleTelegramBot:
             # Fallback: use the first line
             smtp_line = lines[0] if lines else text
             
-        # Remove recipient emails from SMTP line for parsing
-        smtp_text = smtp_line
-        for email in emails:
-            # Only remove emails that are not the SMTP username
-            if email in smtp_text:
-                # Check if this email is likely the username (appears early in line)
-                words = smtp_text.split()
-                try:
-                    email_index = next(i for i, word in enumerate(words) if email in word)
-                    # If email appears after position 2 (server, port), it's likely a recipient
-                    if email_index > 2:
-                        smtp_text = smtp_text.replace(email, "")
-                except StopIteration:
-                    pass
-        
-        # Parse SMTP configuration
-        smtp_config = None
-        words = smtp_text.split()
+        # Parse SMTP configuration from the line
+        words = smtp_line.split()
         
         # Look for server (contains dots, not an email)
         server = None
@@ -369,34 +353,49 @@ class SimpleTelegramBot:
                 port = word
                 break
         
-        # Get remaining words (username, password, tls)
-        remaining_words = [w for w in words if w != server and w != port]
-        
-        # Find username (likely an email or first remaining word)
+        # Find username (email address in the line)
         username = None
-        password = None
-        tls = True  # Default to True
+        for email in emails:
+            if email in smtp_line:
+                # Check position - if it appears early, it's likely the username
+                email_pos = smtp_line.find(email)
+                username = email
+                break
         
-        if remaining_words:
-            # Username is usually an email or first word
-            username = remaining_words[0]
-            if len(remaining_words) > 1:
-                password = remaining_words[1]
-                
-                # Check for TLS indicator in remaining words
-                for word in remaining_words[2:]:
-                    if word.lower() in ['true', 'false', '1', '0', 'tls', 'ssl']:
-                        tls = word.lower() in ['true', '1', 'tls']
-                        break
+        # Find password (word that comes after username but isn't an email)
+        password = None
+        if username:
+            words_after_username = []
+            found_username = False
+            for word in words:
+                if username in word:
+                    found_username = True
+                elif found_username and '@' not in word and word not in ['true', 'false', '1', '0']:
+                    password = word
+                    break
+        
+        # Determine TLS setting - default to True, especially for common providers
+        tls = True
+        if server and ('mail.me.com' in server or 'icloud' in server.lower()):
+            tls = True  # iCloud requires TLS
+        elif 'gmail' in server.lower() if server else False:
+            tls = True  # Gmail requires TLS
+        else:
+            # Check for explicit TLS setting
+            for word in words:
+                if word.lower() in ['true', 'false', '1', '0']:
+                    tls = word.lower() in ['true', '1']
+                    break
         
         # Build SMTP config if we have minimum required fields
+        smtp_config = None
         if server and port and username and password:
             smtp_config = {
                 "server": server.strip(),
                 "port": port.strip(),
                 "username": username.strip(),
                 "password": password.strip(),
-                "tls": tls  # Default to True
+                "tls": tls
             }
         
         # Filter out SMTP username from recipient emails
