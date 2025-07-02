@@ -704,9 +704,9 @@ The code simplifies the input format for the fast test to be more user-friendly 
 ```
 
 *Common Providers:*
-• Gmail: smtp.gmail.com:587 (TLS)
-• Outlook: smtp-mail.outlook.com:587 (TLS)  
-• Yahoo: smtp.mail.yahoo.com:587 (TLS)
+- Gmail: smtp.gmail.com:587 (TLS)
+- Outlook: smtp-mail.outlook.com:587 (TLS)  
+- Yahoo: smtp.mail.yahoo.com:587 (TLS)
 
 *Email List Format:*
 Send emails separated by commas or one per line:
