@@ -5,7 +5,7 @@ channel = "stable-24_05"
 packages = ["async", "fltk"]
 
 [workflows]
-runButton = "Project"
+runButton = "Start Bot"
 
 [[workflows.workflow]]
 name = "Project"
@@ -35,3 +35,12 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pip install python-telegram-bot asyncio"
+
+[[workflows.workflow]]
+name = "Start Bot"
+author = 44517504
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python simple_bot.py"

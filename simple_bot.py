@@ -137,14 +137,6 @@ class SimpleTelegramBot:
         """Send welcome message"""
         message = """🤖 *Email Tester Bot*
 
-Welcome! I help you test email delivery using your SMTP credentials.
-
-*How it works:*
-1. Click "Test Fast" below
-2. Select a domain for your test email
-3. Provide your SMTP configuration and email list together
-4. I'll send a test email with blue button linking to your selected domain
-
 Choose an option below:"""
 
         keyboard = {
