@@ -1,11 +1,6 @@
 modules = ["python-3.11"]
-
-[nix]
-channel = "stable-24_05"
-packages = ["async", "fltk"]
-
 [workflows]
-runButton = "Start Bot"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -16,25 +11,13 @@ author = "agent"
 task = "workflow.run"
 args = "Telegram Bot"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "telegram_bot"
-
 [[workflows.workflow]]
 name = "Telegram Bot"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python simple_bot.py"
-
-[[workflows.workflow]]
-name = "telegram_bot"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pip install python-telegram-bot asyncio"
+args = "python3 simple_bot.py"
 
 [[workflows.workflow]]
 name = "Start Bot"
