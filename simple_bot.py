@@ -114,15 +114,22 @@ class SimpleTelegramBot:
             await self.send_message(chat_id, "Too many requests. Please wait a minute.")
             return
 
+        # Handle /start command first (always resets the bot)
+        if text.startswith("/start"):
+            # Clear any active session when /start is used
+            if user_id in self.user_sessions:
+                del self.user_sessions[user_id]
+            await self.clear_chat_history(chat_id)
+            await self.send_start_message(chat_id)
+            return
+
         # Check if user has an active session
         if user_id in self.user_sessions:
             await self.handle_session_message(chat_id, text)
             return
 
-        # Handle commands
-        if text.startswith("/start"):
-            await self.send_start_message(chat_id)
-        elif text.startswith("/help"):
+        # Handle other commands
+        if text.startswith("/help"):
             await self.send_help_message(chat_id)
         elif text.startswith("/test"):
             await self.show_domain_selection(chat_id)
