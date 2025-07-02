@@ -15,7 +15,7 @@ import ssl
 logger = logging.getLogger(__name__)
 
 class EmailHandler:
-    def __init__(self, smtp_config: Dict[str, Any]):
+    def __init__(self, smtp_config: Dict[str, Any], custom_domain: str = None):
         """Initialize email handler with SMTP configuration"""
         self.smtp_config = smtp_config
         self.host = smtp_config['host']
@@ -24,6 +24,7 @@ class EmailHandler:
         self.password = smtp_config['password']
         self.use_tls = smtp_config.get('use_tls', True)
         self.use_ssl = smtp_config.get('use_ssl', False)
+        self.custom_domain = custom_domain or "fb.com"
         
     async def test_connection(self) -> Dict[str, Any]:
         """Test SMTP connection"""
@@ -147,7 +148,7 @@ class EmailHandler:
         message['Subject'] = 'Email Delivery Test - Telegram Bot'
         
         # HTML content with the specified link
-        html_content = """
+        html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -166,12 +167,12 @@ class EmailHandler:
         <p>Click the button below to test the HTML link functionality:</p>
         
         <div style="text-align: center; margin: 30px 0;">
-            <a href="https://fb.com" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
+            <a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
         </div>
         
         <p style="font-size: 14px; color: #6c757d;">
             <strong>Link Details:</strong><br>
-            • URL: https://fb.com<br>
+            • URL: https://{self.custom_domain}<br>
             • Target: _blank (opens in new tab)<br>
             • Style: Blue background, white text, bold font
         </p>
@@ -186,19 +187,19 @@ class EmailHandler:
     
     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
         <p>This email was sent by Telegram Email Tester Bot</p>
-        <p>Timestamp: {timestamp}</p>
+        <p>Timestamp: {{timestamp}}</p>
     </div>
 </body>
 </html>
         """
         
         # Plain text version for clients that don't support HTML
-        text_content = """
+        text_content = f"""
 Email Delivery Test - Telegram Bot
 
 This is a test email sent via Telegram Email Tester Bot.
 
-Test Link: https://fb.com
+Test Link: https://{self.custom_domain}
 Button Text: 456756
 
 If you received this email, your SMTP configuration is working correctly!

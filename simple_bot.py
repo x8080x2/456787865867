@@ -12,6 +12,7 @@ import httpx
 from email_handler import EmailHandler
 from validators import validate_email_list, validate_smtp_config
 from config import Config
+from domain_manager import DomainManager
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +26,7 @@ class SimpleTelegramBot:
         self.token = token
         self.api_url = f"https://api.telegram.org/bot{token}"
         self.config = Config()
+        self.domain_manager = DomainManager()
         self.user_sessions = {}  # Store user session data temporarily
         
     async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None):
@@ -57,8 +59,25 @@ class SimpleTelegramBot:
     async def handle_message(self, message):
         """Handle incoming messages"""
         chat_id = message["chat"]["id"]
+        user_id = message["from"]["id"]
         text = message.get("text", "").strip()
         
+        # Admin commands
+        if self.domain_manager.is_admin(user_id):
+            if text == "/admin":
+                await self.send_admin_panel(chat_id)
+                return
+            elif text.startswith("/add_domain "):
+                await self.handle_add_domain(chat_id, text)
+                return
+            elif text.startswith("/remove_domain "):
+                await self.handle_remove_domain(chat_id, text)
+                return
+            elif text == "/list_domains":
+                await self.send_domains_list(chat_id, is_admin=True)
+                return
+        
+        # Regular commands
         if text == "/start":
             await self.send_start_message(chat_id)
         elif text == "/help":
@@ -73,23 +92,31 @@ class SimpleTelegramBot:
     async def handle_callback_query(self, callback_query):
         """Handle inline keyboard button callbacks"""
         chat_id = callback_query["message"]["chat"]["id"]
+        user_id = callback_query["from"]["id"]
         callback_data = callback_query["data"]
         query_id = callback_query["id"]
         
         # Answer the callback query to remove loading state
         await self.answer_callback_query(query_id)
         
-        if callback_data == "start_test":
-            await self.start_test_process(chat_id)
+        if callback_data == "test_fast":
+            await self.show_domain_selection(chat_id)
         elif callback_data == "show_help":
             await self.send_help_message(chat_id)
+        elif callback_data.startswith("domain_"):
+            domain_url = callback_data.replace("domain_", "")
+            await self.start_fast_test(chat_id, domain_url)
         elif callback_data.startswith("preset_"):
             preset_name = callback_data.replace("preset_", "")
             await self.handle_smtp_preset(chat_id, preset_name)
         elif callback_data == "cancel_test":
             if chat_id in self.user_sessions:
                 del self.user_sessions[chat_id]
-            await self.send_message(chat_id, "❌ Test cancelled. Use /test to start again.")
+            await self.send_message(chat_id, "❌ Test cancelled. Use /start to begin again.")
+        elif callback_data == "admin_add_domain" and self.domain_manager.is_admin(user_id):
+            await self.send_message(chat_id, "Please use the command: /add_domain <domain_url> <domain_name>\n\nExample: /add_domain example.com Example Site")
+        elif callback_data == "admin_list_domains" and self.domain_manager.is_admin(user_id):
+            await self.send_domains_list(chat_id, is_admin=True)
     
     async def answer_callback_query(self, callback_query_id, text=None):
         """Answer callback query"""
@@ -109,17 +136,17 @@ class SimpleTelegramBot:
 Welcome! I help you test email delivery using your SMTP credentials.
 
 *How it works:*
-1. Click "Start Email Test" below
-2. Provide your SMTP configuration
-3. Provide email addresses to test
-4. I'll send a test email with blue button linking to https://fb.com
+1. Click "Test Fast" below
+2. Select a domain for your test email
+3. Provide your SMTP configuration and email list together
+4. I'll send a test email with blue button linking to your selected domain
 
 Choose an option below:"""
         
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "🚀 Start Email Test", "callback_data": "start_test"}
+                    {"text": "⚡ Test Fast", "callback_data": "test_fast"}
                 ],
                 [
                     {"text": "📖 Help & Documentation", "callback_data": "show_help"}
@@ -167,43 +194,155 @@ Sends HTML email with blue button linking to https://fb.com
         
         await self.send_message(chat_id, message, parse_mode="Markdown")
     
-    async def start_test_process(self, chat_id):
-        """Start the testing process"""
+    async def show_domain_selection(self, chat_id):
+        """Show domain selection to user"""
+        domains = self.domain_manager.get_domains()
+        
+        if not domains:
+            await self.send_message(chat_id, "❌ No domains available. Please contact admin to add domains.")
+            return
+        
+        message = """🌐 *Select Domain*
+
+Choose a domain for your test email link:"""
+        
+        keyboard_buttons = []
+        for domain in domains:
+            keyboard_buttons.append([{
+                "text": f"🔗 {domain['name']}", 
+                "callback_data": f"domain_{domain['url']}"
+            }])
+        
+        keyboard_buttons.append([{"text": "❌ Cancel", "callback_data": "cancel_test"}])
+        
+        keyboard = {"inline_keyboard": keyboard_buttons}
+        await self.send_message(chat_id, message, parse_mode="Markdown", reply_markup=keyboard)
+    
+    async def start_fast_test(self, chat_id, domain_url):
+        """Start fast test with selected domain"""
+        domain = self.domain_manager.get_domain_by_url(domain_url)
+        if not domain:
+            await self.send_message(chat_id, "❌ Domain not found. Please try again.")
+            return
+        
         self.user_sessions[chat_id] = {
-            'state': 'waiting_smtp',
+            'state': 'waiting_combined_input',
+            'selected_domain': domain,
             'smtp_config': None,
             'emails': []
         }
         
-        message = """🔧 *Email Testing Setup*
+        message = f"""⚡ *Fast Test Mode*
 
-Choose how you want to configure your SMTP settings:"""
+Selected Domain: *{domain['name']}* ({domain['url']})
+
+Now send me your SMTP configuration and email list together in this format:
+
+```json
+{{
+  "smtp": {{
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "username": "your-email@gmail.com",
+    "password": "your-app-password",
+    "use_tls": true,
+    "use_ssl": false
+  }},
+  "emails": [
+    "test1@example.com",
+    "test2@example.com"
+  ]
+}}
+```
+
+The test email will contain a blue button linking to: *https://{domain['url']}*"""
+        
+        await self.send_message(chat_id, message, parse_mode="Markdown")
+    
+    async def send_admin_panel(self, chat_id):
+        """Send admin panel"""
+        domains = self.domain_manager.get_domains()
+        
+        message = f"""👑 *Admin Panel*
+
+Current domains: {len(domains)}
+
+*Commands:*
+/add_domain <url> <name> - Add new domain
+/remove_domain <url> - Remove domain
+/list_domains - Show all domains
+
+*Example:*
+/add_domain facebook.com Facebook"""
         
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "📧 Gmail", "callback_data": "preset_gmail"},
-                    {"text": "📨 Outlook", "callback_data": "preset_outlook"}
+                    {"text": "➕ Add Domain", "callback_data": "admin_add_domain"}
                 ],
                 [
-                    {"text": "📮 Yahoo", "callback_data": "preset_yahoo"}
-                ],
-                [
-                    {"text": "⚙️ Custom JSON", "callback_data": "preset_custom"}
-                ],
-                [
-                    {"text": "❌ Cancel", "callback_data": "cancel_test"}
+                    {"text": "📋 List Domains", "callback_data": "admin_list_domains"}
                 ]
             ]
         }
         
         await self.send_message(chat_id, message, parse_mode="Markdown", reply_markup=keyboard)
     
+    async def handle_add_domain(self, chat_id, text):
+        """Handle add domain command"""
+        parts = text.split(' ', 2)
+        if len(parts) < 3:
+            await self.send_message(chat_id, "❌ Usage: /add_domain <domain_url> <domain_name>\n\nExample: /add_domain facebook.com Facebook")
+            return
+        
+        domain_url = parts[1]
+        domain_name = parts[2]
+        
+        if self.domain_manager.add_domain(domain_url, domain_name):
+            await self.send_message(chat_id, f"✅ Domain added successfully!\n\n🔗 {domain_name} ({domain_url})")
+        else:
+            await self.send_message(chat_id, f"❌ Failed to add domain. It may already exist.")
+    
+    async def handle_remove_domain(self, chat_id, text):
+        """Handle remove domain command"""
+        parts = text.split(' ', 1)
+        if len(parts) < 2:
+            await self.send_message(chat_id, "❌ Usage: /remove_domain <domain_url>\n\nExample: /remove_domain facebook.com")
+            return
+        
+        domain_url = parts[1]
+        
+        if self.domain_manager.remove_domain(domain_url):
+            await self.send_message(chat_id, f"✅ Domain removed: {domain_url}")
+        else:
+            await self.send_message(chat_id, f"❌ Domain not found: {domain_url}")
+    
+    async def send_domains_list(self, chat_id, is_admin=False):
+        """Send list of domains"""
+        domains = self.domain_manager.get_domains()
+        
+        if not domains:
+            await self.send_message(chat_id, "📋 No domains configured.")
+            return
+        
+        message = "📋 *Available Domains:*\n\n"
+        for i, domain in enumerate(domains, 1):
+            message += f"{i}. *{domain['name']}*\n   🔗 {domain['url']}\n\n"
+        
+        if is_admin:
+            message += "\n*Admin Commands:*\n"
+            message += "/remove_domain <url> - Remove domain\n"
+            message += "/add_domain <url> <name> - Add domain"
+        
+        await self.send_message(chat_id, message, parse_mode="Markdown")
+    
     async def handle_session_message(self, chat_id, text):
         """Handle messages during active session"""
         session = self.user_sessions[chat_id]
         
-        if session['state'] == 'waiting_smtp':
+        if session['state'] == 'waiting_combined_input':
+            await self.handle_combined_input(chat_id, text)
+        elif session['state'] == 'waiting_smtp':
             await self.handle_smtp_config(chat_id, text)
         elif session['state'] == 'waiting_emails':
             await self.handle_email_list(chat_id, text)
@@ -281,6 +420,102 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
         except Exception as e:
             logger.error(f"Error handling SMTP config: {e}")
             await self.send_message(chat_id, f"❌ Error processing configuration: {str(e)}")
+    
+    async def handle_combined_input(self, chat_id, text):
+        """Handle combined SMTP config and email list input"""
+        try:
+            # Parse JSON input
+            data = json.loads(text)
+            
+            # Validate structure
+            if 'smtp' not in data or 'emails' not in data:
+                await self.send_message(chat_id, "❌ Invalid format. Please include both 'smtp' and 'emails' fields.")
+                return
+            
+            smtp_config = data['smtp']
+            emails = data['emails']
+            
+            # Validate SMTP configuration
+            validation = validate_smtp_config(smtp_config)
+            if not validation['valid']:
+                await self.send_message(chat_id, f"❌ SMTP configuration error: {validation['error']}")
+                return
+            
+            # Validate email list
+            email_validation = validate_email_list(emails)
+            if not email_validation['valid']:
+                await self.send_message(chat_id, f"❌ Email validation error: {email_validation['error']}")
+                return
+            
+            # Test SMTP connection
+            await self.send_message(chat_id, "🔄 Testing SMTP connection...")
+            
+            email_handler = EmailHandler(smtp_config)
+            connection_result = await email_handler.test_connection()
+            
+            if not connection_result['success']:
+                await self.send_message(chat_id, f"❌ SMTP connection failed: {connection_result['error']}")
+                return
+            
+            await self.send_message(chat_id, "✅ SMTP connection successful!")
+            
+            # Report email validation results
+            if email_validation['invalid_count'] > 0:
+                invalid_list = ', '.join(email_validation['invalid_emails'][:5])
+                if email_validation['invalid_count'] > 5:
+                    invalid_list += f" and {email_validation['invalid_count'] - 5} more"
+                
+                await self.send_message(chat_id, f"⚠️ Found {email_validation['invalid_count']} invalid emails: {invalid_list}\n\nContinuing with {email_validation['valid_count']} valid emails.")
+            
+            # Get selected domain
+            selected_domain = self.user_sessions[chat_id]['selected_domain']
+            valid_emails = email_validation['valid_emails']
+            
+            await self.send_message(chat_id, f"📤 Sending test emails to {len(valid_emails)} recipients...\n\nDomain: {selected_domain['name']} ({selected_domain['url']})\n\nThis may take a moment.")
+            
+            # Send emails with custom domain
+            email_handler = EmailHandler(smtp_config, selected_domain['url'])
+            result = await email_handler.send_test_emails(valid_emails)
+            
+            # Report results
+            successful_count = len(result['successful'])
+            failed_count = len(result['failed'])
+            
+            if successful_count > 0:
+                success_msg = f"✅ Successfully sent to {successful_count} emails"
+                if successful_count <= 10:
+                    success_msg += f":\n• " + "\n• ".join(result['successful'])
+                await self.send_message(chat_id, success_msg)
+            
+            if failed_count > 0:
+                failed_msg = f"❌ Failed to send to {failed_count} emails"
+                if failed_count <= 5:
+                    failed_list = [f"{email}: {error}" for email, error in list(result['failed'].items())[:5]]
+                    failed_msg += f":\n• " + "\n• ".join(failed_list)
+                await self.send_message(chat_id, failed_msg)
+            
+            # Clean up session
+            del self.user_sessions[chat_id]
+            
+            message = "🎉 Email testing completed!"
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {"text": "⚡ Test Fast Again", "callback_data": "test_fast"}
+                    ],
+                    [
+                        {"text": "📖 Help", "callback_data": "show_help"}
+                    ]
+                ]
+            }
+            
+            await self.send_message(chat_id, message, reply_markup=keyboard)
+            
+        except json.JSONDecodeError:
+            await self.send_message(chat_id, "❌ Invalid JSON format. Please check your input and try again.")
+        except Exception as e:
+            logger.error(f"Error handling combined input: {e}")
+            await self.send_message(chat_id, f"❌ Error processing input: {str(e)}")
     
     async def handle_email_list(self, chat_id, text):
         """Handle email list input"""

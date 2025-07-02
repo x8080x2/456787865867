@@ -1,0 +1,17 @@
+
+{
+  "domains": [
+    {
+      "url": "facebook.com",
+      "name": "Facebook"
+    },
+    {
+      "url": "google.com", 
+      "name": "Google"
+    },
+    {
+      "url": "youtube.com",
+      "name": "YouTube"
+    }
+  ]
+}
