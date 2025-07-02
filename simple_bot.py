@@ -41,7 +41,7 @@ class SimpleTelegramBot:
         if reply_markup:
             data["reply_markup"] = reply_markup
             
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, json=data)
             return response.json()
     
@@ -52,7 +52,7 @@ class SimpleTelegramBot:
         if offset:
             params["offset"] = offset
             
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, params=params)
             return response.json()
     
@@ -125,7 +125,7 @@ class SimpleTelegramBot:
         if text:
             data["text"] = text
             
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(url, json=data)
             return response.json()
     
@@ -604,13 +604,19 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
                     for update in updates.get("result", []):
                         offset = update["update_id"] + 1
                         
-                        if "message" in update:
-                            await self.handle_message(update["message"])
-                        elif "callback_query" in update:
-                            await self.handle_callback_query(update["callback_query"])
+                        try:
+                            if "message" in update:
+                                await self.handle_message(update["message"])
+                            elif "callback_query" in update:
+                                await self.handle_callback_query(update["callback_query"])
+                        except Exception as e:
+                            logger.error(f"Error handling update: {e}")
                 
-                await asyncio.sleep(1)  # Small delay between requests
+                await asyncio.sleep(0.5)  # Small delay between requests
                 
+            except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                logger.warning(f"Timeout error: {e}")
+                await asyncio.sleep(2)  # Short wait for timeout
             except Exception as e:
                 logger.error(f"Error in bot loop: {e}")
                 logger.exception("Full traceback:")

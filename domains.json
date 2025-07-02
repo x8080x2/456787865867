@@ -6,12 +6,12 @@
       "name": "Facebook"
     },
     {
-      "url": "google.com", 
+      "url": "google.com",
       "name": "Google"
     },
     {
-      "url": "youtube.com",
-      "name": "YouTube"
+      "url": "example.com",
+      "name": "Example"
     }
   ]
 }
