@@ -160,11 +160,11 @@ class SimpleTelegramBot:
         """Start fast test with selected domain"""
         user_id = chat_id
         self.user_sessions[user_id] = {
-            "step": "smtp_config",
+            "step": "smtp_and_emails",
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, "Enter SMTP details: server:port:username:password:tls")
+        await self.send_message(chat_id, "Enter SMTP details and 5 emails:\nserver:port:username:password:tls\nemail1,email2,email3,email4,email5")
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -180,11 +180,51 @@ class SimpleTelegramBot:
         if not session:
             return
         
-        if session["step"] == "smtp_config":
+        if session["step"] == "smtp_and_emails":
+            await self.handle_smtp_and_emails(chat_id, text)
+        elif session["step"] == "smtp_config":
             await self.handle_smtp_config(chat_id, text)
         elif session["step"] == "email_list":
             await self.handle_email_list(chat_id, text)
 
+    async def handle_smtp_and_emails(self, chat_id, text):
+        """Handle combined SMTP config and email list input"""
+        user_id = chat_id
+        session = self.user_sessions.get(user_id)
+        if not session:
+            return
+
+        lines = text.strip().split('\n')
+        if len(lines) != 2:
+            await self.send_message(chat_id, "Invalid format. Use:\nserver:port:username:password:tls\nemail1,email2,email3,email4,email5")
+            return
+
+        smtp_line = lines[0]
+        emails_line = lines[1]
+
+        # Parse SMTP config
+        smtp_parts = smtp_line.split(":")
+        if len(smtp_parts) != 5:
+            await self.send_message(chat_id, "Invalid SMTP format. Use: server:port:username:password:tls")
+            return
+
+        # Parse emails
+        emails = [email.strip() for email in emails_line.split(",")]
+        if len(emails) != 5:
+            await self.send_message(chat_id, f"Please enter exactly 5 emails. You entered {len(emails)}.")
+            return
+
+        # Store config
+        session["smtp_config"] = {
+            "server": smtp_parts[0], "port": smtp_parts[1], 
+            "username": smtp_parts[2], "password": smtp_parts[3], "tls": smtp_parts[4]
+        }
+        session["emails"] = emails
+
+        await self.send_message(chat_id, "Test started for 5 emails...")
+        
+        # Clear session
+        del self.user_sessions[user_id]
 
 
     async def handle_smtp_config(self, chat_id, text):
