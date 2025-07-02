@@ -28,6 +28,8 @@ class SimpleTelegramBot:
         self.domain_manager = DomainManager()
         self.user_sessions = {}
         self.user_message_history = {}  # Track messages for cleanup
+        self.user_rate_limits = {}  # Rate limiting per user
+        self.max_requests_per_minute = 10
 
     async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None, auto_delete=True):
         """Send a message to a chat"""
@@ -96,6 +98,11 @@ class SimpleTelegramBot:
         text = message.get("text", "")
         user_id = message["from"]["id"]
 
+        # Rate limiting check
+        if not self.check_rate_limit(user_id):
+            await self.send_message(chat_id, "Too many requests. Please wait a minute.")
+            return
+
         # Check if user has an active session
         if user_id in self.user_sessions:
             await self.handle_session_message(chat_id, text)
@@ -157,7 +164,9 @@ class SimpleTelegramBot:
         """Send admin panel"""
         keyboard = [
             [{"text": "➕ Add Domain", "callback_data": "admin_add"}],
+            [{"text": "📥 Bulk Import", "callback_data": "admin_bulk"}],
             [{"text": "➖ Remove Domain", "callback_data": "admin_remove"}],
+            [{"text": "🗑️ Clear All Domains", "callback_data": "admin_clear_all"}],
             [{"text": "📋 List Domains", "callback_data": "view_domains"}]
         ]
         reply_markup = json.dumps({"inline_keyboard": keyboard})
@@ -186,6 +195,17 @@ class SimpleTelegramBot:
                 await self.handle_admin_action(chat_id, data)
             else:
                 await self.send_message(chat_id, "Admin access required.")
+        elif data == "confirm_clear_all":
+            if self.domain_manager.is_admin(user_id):
+                success = self.domain_manager.clear_all_domains()
+                if success:
+                    await self.send_message(chat_id, "✅ All domains cleared successfully.")
+                else:
+                    await self.send_message(chat_id, "❌ Failed to clear domains.")
+            else:
+                await self.send_message(chat_id, "Admin access required.")
+        elif data == "cancel_clear":
+            await self.send_message(chat_id, "Operation cancelled.")
 
     async def answer_callback_query(self, callback_query_id):
         """Answer callback query"""
@@ -213,6 +233,19 @@ class SimpleTelegramBot:
             await self.send_message(chat_id, "Send domain in format: name|url")
         elif action == "admin_remove":
             await self.send_message(chat_id, "Send domain URL to remove")
+        elif action == "admin_clear_all":
+            await self.confirm_clear_all_domains(chat_id)
+        elif action == "admin_bulk":
+            await self.send_message(chat_id, "Send domains list:\nname1|url1\nname2|url2\n...")
+
+    async def confirm_clear_all_domains(self, chat_id):
+        """Confirm clearing all domains"""
+        keyboard = [
+            [{"text": "🗑️ Yes, Clear All", "callback_data": "confirm_clear_all"}],
+            [{"text": "❌ Cancel", "callback_data": "cancel_clear"}]
+        ]
+        reply_markup = json.dumps({"inline_keyboard": keyboard})
+        await self.send_message(chat_id, "⚠️ Delete ALL domains? This cannot be undone.", reply_markup=reply_markup)
 
     async def handle_session_message(self, chat_id, text):
         """Handle messages during active session"""
@@ -320,6 +353,28 @@ class SimpleTelegramBot:
                 }
         
         return smtp_config, emails
+
+    def check_rate_limit(self, user_id):
+        """Check if user is within rate limits"""
+        import time
+        current_time = time.time()
+        
+        if user_id not in self.user_rate_limits:
+            self.user_rate_limits[user_id] = []
+        
+        # Remove old requests (older than 1 minute)
+        self.user_rate_limits[user_id] = [
+            req_time for req_time in self.user_rate_limits[user_id] 
+            if current_time - req_time < 60
+        ]
+        
+        # Check if user has exceeded limit
+        if len(self.user_rate_limits[user_id]) >= self.max_requests_per_minute:
+            return False
+        
+        # Add current request
+        self.user_rate_limits[user_id].append(current_time)
+        return True
 
 
     async def handle_smtp_config(self, chat_id, text):
