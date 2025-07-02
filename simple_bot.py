@@ -259,7 +259,7 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
         elif action == "admin_clear_all":
             await self.confirm_clear_all_domains(chat_id)
         elif action == "admin_bulk":
-            await self.send_message(chat_id, "Send domains list:\nname1|url1\nname2|url2\n...")
+            await self.send_message(chat_id, "Send domains list (one per line):\nanicul.info\nbernrueda.info\nblogbird.info\n...")
 
     async def confirm_clear_all_domains(self, chat_id):
         """Confirm clearing all domains"""
