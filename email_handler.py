@@ -43,18 +43,20 @@ class EmailHandler:
             }
 
     def _test_connection_sync(self) -> Dict[str, Any]:
-        """Synchronous SMTP connection test"""
+        """Fast SMTP connection test with optimized timeout"""
+        server = None
         try:
             if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.host, self.port)
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=10)
             else:
-                server = smtplib.SMTP(self.host, self.port)
+                server = smtplib.SMTP(self.host, self.port, timeout=10)
                 if self.use_tls:
                     server.starttls()
 
+            # Set shorter timeout for login
+            server.sock.settimeout(8)
             server.login(self.username, self.password)
-            server.quit()
-
+            
             return {
                 'success': True,
                 'message': 'SMTP connection successful'
@@ -80,6 +82,12 @@ class EmailHandler:
                 'success': False,
                 'error': f"Connection error: {str(e)}"
             }
+        finally:
+            if server:
+                try:
+                    server.quit()
+                except:
+                    pass
 
     async def send_test_emails(self, email_list: List[str]) -> Dict[str, Any]:
         """Send test emails to the provided list"""
@@ -97,40 +105,58 @@ class EmailHandler:
             }
 
     def _send_emails_sync(self, email_list: List[str]) -> Dict[str, Any]:
-        """Synchronous email sending"""
+        """Optimized synchronous email sending with connection reuse"""
         successful = []
         failed = {}
+        server = None
 
         try:
-            # Establish SMTP connection
+            # Establish SMTP connection with timeout
             if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.host, self.port)
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
             else:
-                server = smtplib.SMTP(self.host, self.port)
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
                 if self.use_tls:
                     server.starttls()
 
+            # Set shorter timeout for operations
+            server.sock.settimeout(10)
             server.login(self.username, self.password)
 
-            # Send emails one by one
-            for email in email_list:
-                try:
-                    message = self._create_test_message(email)
-                    server.send_message(message)
-                    successful.append(email)
-                    logger.info(f"Email sent successfully to {email}")
+            # Send emails in batches for better performance
+            batch_size = 5
+            for i in range(0, len(email_list), batch_size):
+                batch = email_list[i:i + batch_size]
+                
+                for email in batch:
+                    try:
+                        message = self._create_test_message(email)
+                        # Use send_message which is more efficient
+                        server.send_message(message)
+                        successful.append(email)
+                        logger.info(f"Email sent to {email}")
 
-                except Exception as e:
-                    failed[email] = str(e)
-                    logger.error(f"Failed to send email to {email}: {e}")
-
-            server.quit()
+                    except Exception as e:
+                        failed[email] = str(e)
+                        logger.error(f"Failed to send to {email}: {e}")
+                
+                # Small delay between batches to avoid overwhelming the server
+                if i + batch_size < len(email_list):
+                    import time
+                    time.sleep(0.1)
 
         except Exception as e:
-            # If connection fails, mark all emails as failed
+            # If connection fails, mark all remaining emails as failed
             for email in email_list:
                 if email not in successful and email not in failed:
                     failed[email] = f"SMTP connection error: {str(e)}"
+        
+        finally:
+            if server:
+                try:
+                    server.quit()
+                except:
+                    pass
 
         return {
             'successful': successful,

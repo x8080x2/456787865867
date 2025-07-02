@@ -285,6 +285,9 @@ class SimpleTelegramBot:
         await self.clear_chat_history(chat_id)
         await self.send_message(chat_id, f"✅ Test started for {len(emails)} email(s)...", auto_delete=False)
         
+        # Send emails asynchronously
+        await self.send_test_emails(chat_id, smtp_config, emails, session["domain_url"])
+        
         # Clear session
         del self.user_sessions[user_id]
 
@@ -365,6 +368,43 @@ class SimpleTelegramBot:
                 }
         
         return smtp_config, emails
+
+    async def send_test_emails(self, chat_id, smtp_config, emails, domain_url):
+        """Send test emails asynchronously"""
+        try:
+            # Convert config format
+            config = {
+                'host': smtp_config['server'],
+                'port': int(smtp_config['port']),
+                'username': smtp_config['username'],
+                'password': smtp_config['password'],
+                'use_tls': smtp_config['tls'],
+                'use_ssl': False
+            }
+            
+            email_handler = EmailHandler(config, domain_url)
+            
+            # Test connection first
+            connection_result = await email_handler.test_connection()
+            if not connection_result['success']:
+                await self.send_message(chat_id, f"❌ Connection failed: {connection_result['error']}")
+                return
+            
+            # Send emails
+            result = await email_handler.send_test_emails(emails)
+            
+            # Report results
+            successful = result['successful']
+            failed = result['failed']
+            
+            if successful:
+                await self.send_message(chat_id, f"✅ Successfully sent to {len(successful)} email(s)")
+            
+            if failed:
+                await self.send_message(chat_id, f"❌ Failed to send to {len(failed)} email(s)")
+                
+        except Exception as e:
+            await self.send_message(chat_id, f"❌ Error: {str(e)}")
 
     def check_rate_limit(self, user_id):
         """Check if user is within rate limits"""
@@ -454,7 +494,7 @@ class SimpleTelegramBot:
                             await self.handle_message(update["message"])
                         elif "callback_query" in update:
                             await self.handle_callback_query(update["callback_query"])
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"Error in bot loop: {e}")
                 await asyncio.sleep(5)
