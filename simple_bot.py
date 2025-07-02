@@ -691,3 +691,20 @@ Send the list as a single message.
             del self.user_sessions[chat_id]
 
 async def main():
+    """Main function"""
+    config = Config()
+
+    # Validate configuration
+    validation = config.validate_config()
+    if not validation['valid']:
+        logger.error("Configuration validation failed:")
+        for error in validation['errors']:
+            logger.error(f"  - {error}")
+        return
+
+    # Create and run bot
+    bot = SimpleTelegramBot(config.bot_token)
+    await bot.run()
+
+if __name__ == '__main__':
+    asyncio.run(main())

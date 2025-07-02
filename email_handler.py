@@ -11,8 +11,143 @@ from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 from typing import Dict, List, Any
 import ssl
+import concurrent.futures
 
 logger = logging.getLogger(__name__)
+
+class EmailHandler:
+    def __init__(self, smtp_config: Dict[str, Any], custom_domain: str = "fb.com"):
+        self.smtp_config = smtp_config
+        self.custom_domain = custom_domain
+
+    async def test_connection(self) -> Dict[str, Any]:
+        """Test SMTP connection"""
+        try:
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                result = await loop.run_in_executor(executor, self._test_connection_sync)
+            return result
+        except Exception as e:
+            logger.error(f"Error testing SMTP connection: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _test_connection_sync(self) -> Dict[str, Any]:
+        """Synchronous SMTP connection test"""
+        try:
+            if self.smtp_config.get('use_ssl', False):
+                server = smtplib.SMTP_SSL(
+                    self.smtp_config['host'],
+                    self.smtp_config['port']
+                )
+            else:
+                server = smtplib.SMTP(
+                    self.smtp_config['host'],
+                    self.smtp_config['port']
+                )
+                if self.smtp_config.get('use_tls', False):
+                    server.starttls()
+
+            server.login(
+                self.smtp_config['username'],
+                self.smtp_config['password']
+            )
+            server.quit()
+            return {'success': True}
+
+        except smtplib.SMTPAuthenticationError:
+            return {'success': False, 'error': 'Authentication failed'}
+        except smtplib.SMTPConnectError:
+            return {'success': False, 'error': 'Connection failed'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    async def send_test_emails(self, email_list: List[str]) -> Dict[str, Any]:
+        """Send test emails to the provided list"""
+        successful = []
+        failed = {}
+
+        for email in email_list:
+            try:
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    result = await loop.run_in_executor(
+                        executor, 
+                        self._send_single_email_sync, 
+                        email
+                    )
+
+                if result['success']:
+                    successful.append(email)
+                else:
+                    failed[email] = result['error']
+
+            except Exception as e:
+                logger.error(f"Error sending email to {email}: {e}")
+                failed[email] = str(e)
+
+        return {
+            'successful': successful,
+            'failed': failed
+        }
+
+    def _send_single_email_sync(self, email: str) -> Dict[str, Any]:
+        """Send a single test email synchronously"""
+        try:
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = "Email Delivery Test - Telegram Bot"
+            msg['From'] = formataddr(("Email Tester Bot", self.smtp_config['username']))
+            msg['To'] = email
+
+            # Create HTML content with custom domain
+            html_content = f'''
+            <html>
+              <body>
+                <h2>Email Delivery Test</h2>
+                <p>This is a test email sent by the Telegram Email Tester Bot.</p>
+                <p>Click the button below to test the link:</p>
+                <div style="text-align: center; margin: 20px;">
+                  <a href="https://{self.custom_domain}" target="_blank" 
+                     style="display: inline-block; text-decoration: none; background-color: blue; 
+                            color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">
+                    456756
+                  </a>
+                </div>
+                <p>If you received this email, your SMTP configuration is working correctly!</p>
+              </body>
+            </html>
+            '''
+
+            # Attach HTML content
+            html_part = MIMEText(html_content, 'html')
+            msg.attach(html_part)
+
+            # Send email
+            if self.smtp_config.get('use_ssl', False):
+                server = smtplib.SMTP_SSL(
+                    self.smtp_config['host'],
+                    self.smtp_config['port']
+                )
+            else:
+                server = smtplib.SMTP(
+                    self.smtp_config['host'],
+                    self.smtp_config['port']
+                )
+                if self.smtp_config.get('use_tls', False):
+                    server.starttls()
+
+            server.login(
+                self.smtp_config['username'],
+                self.smtp_config['password']
+            )
+            
+            server.send_message(msg)
+            server.quit()
+
+            return {'success': True}
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 class EmailHandler:
     def __init__(self, smtp_config: Dict[str, Any], custom_domain: str = None):
