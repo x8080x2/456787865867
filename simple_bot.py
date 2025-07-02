@@ -142,9 +142,7 @@ class SimpleTelegramBot:
         elif data.startswith("domain_"):
             domain_url = data.replace("domain_", "")
             await self.start_fast_test(chat_id, domain_url)
-        elif data.startswith("preset_"):
-            preset_name = data.replace("preset_", "")
-            await self.handle_smtp_preset(chat_id, preset_name)
+
         elif data.startswith("admin_"):
             if self.domain_manager.is_admin(user_id):
                 await self.handle_admin_action(chat_id, data)
@@ -166,13 +164,7 @@ class SimpleTelegramBot:
             "domain_url": domain_url
         }
         
-        keyboard = [
-            [{"text": "📧 Gmail", "callback_data": "preset_gmail"}],
-            [{"text": "📧 Outlook", "callback_data": "preset_outlook"}],
-            [{"text": "⚙️ Custom SMTP", "callback_data": "preset_custom"}]
-        ]
-        reply_markup = json.dumps({"inline_keyboard": keyboard})
-        await self.send_message(chat_id, "Choose SMTP provider:", reply_markup=reply_markup)
+        await self.send_message(chat_id, "Enter SMTP details: server:port:username:password:tls")
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -193,19 +185,7 @@ class SimpleTelegramBot:
         elif session["step"] == "email_list":
             await self.handle_email_list(chat_id, text)
 
-    async def handle_smtp_preset(self, chat_id, preset_name):
-        """Handle SMTP preset selection"""
-        user_id = chat_id
-        session = self.user_sessions.get(user_id)
-        if not session:
-            return
 
-        if preset_name == "custom":
-            await self.send_message(chat_id, "Enter: server:port:username:password:tls")
-            return
-
-        session["smtp_preset"] = preset_name
-        await self.send_message(chat_id, "Enter your email credentials: username:password")
 
     async def handle_smtp_config(self, chat_id, text):
         """Handle SMTP configuration"""
@@ -214,24 +194,18 @@ class SimpleTelegramBot:
         if not session:
             return
 
-        if "smtp_preset" in session:
-            parts = text.split(":")
-            if len(parts) != 2:
-                await self.send_message(chat_id, "Invalid format. Use: username:password")
-                return
-            session["smtp_config"] = {"username": parts[0], "password": parts[1]}
-        else:
-            parts = text.split(":")
-            if len(parts) != 5:
-                await self.send_message(chat_id, "Invalid format. Use: server:port:username:password:tls")
-                return
-            session["smtp_config"] = {
-                "server": parts[0], "port": parts[1], 
-                "username": parts[2], "password": parts[3], "tls": parts[4]
-            }
+        parts = text.split(":")
+        if len(parts) != 5:
+            await self.send_message(chat_id, "Invalid format. Use: server:port:username:password:tls")
+            return
+            
+        session["smtp_config"] = {
+            "server": parts[0], "port": parts[1], 
+            "username": parts[2], "password": parts[3], "tls": parts[4]
+        }
 
         session["step"] = "email_list"
-        await self.send_message(chat_id, "Enter email addresses (comma-separated):")
+        await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
 
     async def handle_email_list(self, chat_id, text):
         """Handle email list input"""
@@ -241,7 +215,11 @@ class SimpleTelegramBot:
             return
 
         emails = [email.strip() for email in text.split(",")]
-        await self.send_message(chat_id, f"Test started for {len(emails)} emails...")
+        if len(emails) != 5:
+            await self.send_message(chat_id, f"Please enter exactly 5 emails. You entered {len(emails)}.")
+            return
+            
+        await self.send_message(chat_id, "Test started for 5 emails...")
         
         # Clear session
         del self.user_sessions[user_id]
