@@ -27,7 +27,7 @@ class SimpleTelegramBot:
         self.config = Config()
         self.user_sessions = {}  # Store user session data temporarily
         
-    async def send_message(self, chat_id, text, parse_mode=None):
+    async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None):
         """Send a message to a chat"""
         url = f"{self.api_url}/sendMessage"
         data = {
@@ -36,6 +36,8 @@ class SimpleTelegramBot:
         }
         if parse_mode:
             data["parse_mode"] = parse_mode
+        if reply_markup:
+            data["reply_markup"] = reply_markup
             
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=data)
@@ -68,26 +70,64 @@ class SimpleTelegramBot:
         else:
             await self.send_message(chat_id, "Please use /test to start email testing or /help for more information.")
     
+    async def handle_callback_query(self, callback_query):
+        """Handle inline keyboard button callbacks"""
+        chat_id = callback_query["message"]["chat"]["id"]
+        callback_data = callback_query["data"]
+        query_id = callback_query["id"]
+        
+        # Answer the callback query to remove loading state
+        await self.answer_callback_query(query_id)
+        
+        if callback_data == "start_test":
+            await self.start_test_process(chat_id)
+        elif callback_data == "show_help":
+            await self.send_help_message(chat_id)
+        elif callback_data.startswith("preset_"):
+            preset_name = callback_data.replace("preset_", "")
+            await self.handle_smtp_preset(chat_id, preset_name)
+        elif callback_data == "cancel_test":
+            if chat_id in self.user_sessions:
+                del self.user_sessions[chat_id]
+            await self.send_message(chat_id, "❌ Test cancelled. Use /test to start again.")
+    
+    async def answer_callback_query(self, callback_query_id, text=None):
+        """Answer callback query"""
+        url = f"{self.api_url}/answerCallbackQuery"
+        data = {"callback_query_id": callback_query_id}
+        if text:
+            data["text"] = text
+            
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=data)
+            return response.json()
+    
     async def send_start_message(self, chat_id):
         """Send welcome message"""
         message = """🤖 *Email Tester Bot*
 
 Welcome! I help you test email delivery using your SMTP credentials.
 
-*Commands:*
-/start - Show this welcome message
-/test - Start email testing process
-/help - Show detailed help
-
 *How it works:*
-1. Use /test command
+1. Click "Start Email Test" below
 2. Provide your SMTP configuration
 3. Provide email addresses to test
 4. I'll send a test email with blue button linking to https://fb.com
 
-Let's get started with /test!"""
+Choose an option below:"""
         
-        await self.send_message(chat_id, message, parse_mode="Markdown")
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🚀 Start Email Test", "callback_data": "start_test"}
+                ],
+                [
+                    {"text": "📖 Help & Documentation", "callback_data": "show_help"}
+                ]
+            ]
+        }
+        
+        await self.send_message(chat_id, message, parse_mode="Markdown", reply_markup=keyboard)
     
     async def send_help_message(self, chat_id):
         """Send help message"""
@@ -137,28 +177,27 @@ Sends HTML email with blue button linking to https://fb.com
         
         message = """🔧 *Email Testing Setup*
 
-Please send me your SMTP configuration as JSON format.
-
-*Example:*
-```json
-{
-  "host": "smtp.gmail.com",
-  "port": 587,
-  "username": "your-email@gmail.com",
-  "password": "your-app-password",
-  "use_tls": true,
-  "use_ssl": false
-}
-```
-
-*Quick presets available:*
-• Type "gmail" for Gmail preset
-• Type "outlook" for Outlook preset  
-• Type "yahoo" for Yahoo preset
-
-Then you'll just need to add your username and password."""
+Choose how you want to configure your SMTP settings:"""
         
-        await self.send_message(chat_id, message, parse_mode="Markdown")
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "📧 Gmail", "callback_data": "preset_gmail"},
+                    {"text": "📨 Outlook", "callback_data": "preset_outlook"}
+                ],
+                [
+                    {"text": "📮 Yahoo", "callback_data": "preset_yahoo"}
+                ],
+                [
+                    {"text": "⚙️ Custom JSON", "callback_data": "preset_custom"}
+                ],
+                [
+                    {"text": "❌ Cancel", "callback_data": "cancel_test"}
+                ]
+            ]
+        }
+        
+        await self.send_message(chat_id, message, parse_mode="Markdown", reply_markup=keyboard)
     
     async def handle_session_message(self, chat_id, text):
         """Handle messages during active session"""
@@ -169,14 +208,29 @@ Then you'll just need to add your username and password."""
         elif session['state'] == 'waiting_emails':
             await self.handle_email_list(chat_id, text)
     
-    async def handle_smtp_config(self, chat_id, text):
-        """Handle SMTP configuration"""
-        try:
-            # Check for preset shortcuts
-            if text.lower() in ['gmail', 'outlook', 'yahoo']:
-                preset = self.config.get_smtp_preset(text.lower())
-                if preset:
-                    preset_msg = f"""📋 *{text.capitalize()} Preset*
+    async def handle_smtp_preset(self, chat_id, preset_name):
+        """Handle SMTP preset selection"""
+        if preset_name == "custom":
+            message = """⚙️ *Custom SMTP Configuration*
+
+Please send me your SMTP configuration as JSON format:
+
+```json
+{
+  "host": "your-smtp-server.com",
+  "port": 587,
+  "username": "your-email@domain.com",
+  "password": "your-password",
+  "use_tls": true,
+  "use_ssl": false
+}
+```"""
+            await self.send_message(chat_id, message, parse_mode="Markdown")
+            return
+            
+        preset = self.config.get_smtp_preset(preset_name)
+        if preset:
+            preset_msg = f"""📋 *{preset_name.capitalize()} Preset*
 
 ```json
 {{
@@ -192,8 +246,11 @@ Then you'll just need to add your username and password."""
 Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials, then send the complete JSON.
 
 *Note:* {preset.get('note', '')}"""
-                    await self.send_message(chat_id, preset_msg, parse_mode="Markdown")
-                    return
+            await self.send_message(chat_id, preset_msg, parse_mode="Markdown")
+
+    async def handle_smtp_config(self, chat_id, text):
+        """Handle SMTP configuration"""
+        try:
             
             # Try to parse as JSON
             smtp_config = json.loads(text)
@@ -281,7 +338,19 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
             # Clean up session
             del self.user_sessions[chat_id]
             
-            await self.send_message(chat_id, "🎉 Email testing completed!\n\nUse /test to run another test.")
+            message = "🎉 Email testing completed!"
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {"text": "🔄 Run Another Test", "callback_data": "start_test"}
+                    ],
+                    [
+                        {"text": "📖 Help", "callback_data": "show_help"}
+                    ]
+                ]
+            }
+            
+            await self.send_message(chat_id, message, reply_markup=keyboard)
             
         except Exception as e:
             logger.error(f"Error handling email list: {e}")
@@ -302,6 +371,8 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
                         
                         if "message" in update:
                             await self.handle_message(update["message"])
+                        elif "callback_query" in update:
+                            await self.handle_callback_query(update["callback_query"])
                 
                 await asyncio.sleep(1)  # Small delay between requests
                 
