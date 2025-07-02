@@ -225,7 +225,7 @@ class SimpleTelegramBot:
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, "Enter SMTP details and 5 emails in any format you prefer.", auto_delete=False)
+        await self.send_message(chat_id, "Enter SMTP details and 1-5 emails in any format you prefer.", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -275,7 +275,7 @@ class SimpleTelegramBot:
             return
             
         if not emails:
-            await self.send_message(chat_id, f"Need exactly 5 emails. Found {len(emails) if emails else 0}.")
+            await self.send_message(chat_id, f"Need 1-5 emails. Found {len(emails) if emails else 0}.")
             return
 
         session["smtp_config"] = smtp_config
@@ -283,7 +283,7 @@ class SimpleTelegramBot:
         
         # Clear previous input message for clean chat
         await self.clear_chat_history(chat_id)
-        await self.send_message(chat_id, "✅ Test started for 5 emails...", auto_delete=False)
+        await self.send_message(chat_id, f"✅ Test started for {len(emails)} email(s)...", auto_delete=False)
         
         # Clear session
         del self.user_sessions[user_id]
@@ -296,7 +296,8 @@ class SimpleTelegramBot:
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         emails = re.findall(email_pattern, text)
         
-        if len(emails) != 5:
+        # Accept 1-5 emails
+        if len(emails) < 1 or len(emails) > 5:
             return None, None
             
         # Remove emails from text to find SMTP config
@@ -310,22 +311,33 @@ class SimpleTelegramBot:
             r'([a-zA-Z0-9.-]+):(\d+):([^:\s]+):([^:\s]+):(true|false|1|0)',
             # server port user pass tls (space separated)
             r'([a-zA-Z0-9.-]+)\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(true|false|1|0)',
-            # gmail.com 587 user@gmail.com password true
-            r'([a-zA-Z0-9.-]+)\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(true|false|1|0)'
+            # server port user pass (no TLS - assume true)
+            r'([a-zA-Z0-9.-]+)\s+(\d+)\s+([^\s]+)\s+([^\s\n]+)',
         ]
         
         smtp_config = None
-        for pattern in smtp_patterns:
+        for i, pattern in enumerate(smtp_patterns):
             match = re.search(pattern, text_without_emails, re.IGNORECASE)
             if match:
-                server, port, username, password, tls = match.groups()
-                smtp_config = {
-                    "server": server.strip(),
-                    "port": port.strip(),
-                    "username": username.strip(),
-                    "password": password.strip(),
-                    "tls": tls.lower() in ['true', '1']
-                }
+                groups = match.groups()
+                if len(groups) == 5:  # Full pattern with TLS
+                    server, port, username, password, tls = groups
+                    smtp_config = {
+                        "server": server.strip(),
+                        "port": port.strip(),
+                        "username": username.strip(),
+                        "password": password.strip(),
+                        "tls": tls.lower() in ['true', '1']
+                    }
+                elif len(groups) == 4:  # Pattern without TLS (assume true)
+                    server, port, username, password = groups
+                    smtp_config = {
+                        "server": server.strip(),
+                        "port": port.strip(),
+                        "username": username.strip(),
+                        "password": password.strip(),
+                        "tls": True  # Default to TLS enabled
+                    }
                 break
                 
         if not smtp_config:
