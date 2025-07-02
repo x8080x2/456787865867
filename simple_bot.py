@@ -252,13 +252,17 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
+        user_id = chat_id
         if action == "admin_add":
+            self.user_sessions[user_id] = {"step": "admin_add_domain"}
             await self.send_message(chat_id, "Send domain in format: name|url")
         elif action == "admin_remove":
+            self.user_sessions[user_id] = {"step": "admin_remove_domain"}
             await self.send_message(chat_id, "Send domain URL to remove")
         elif action == "admin_clear_all":
             await self.confirm_clear_all_domains(chat_id)
         elif action == "admin_bulk":
+            self.user_sessions[user_id] = {"step": "admin_bulk_domains"}
             await self.send_message(chat_id, "Send domains list (one per line):\nanicul.info\nbernrueda.info\nblogbird.info\n...")
 
     async def confirm_clear_all_domains(self, chat_id):
@@ -283,6 +287,12 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
             await self.handle_smtp_config(chat_id, text)
         elif session["step"] == "email_list":
             await self.handle_email_list(chat_id, text)
+        elif session["step"] == "admin_bulk_domains":
+            await self.handle_bulk_domains(chat_id, text)
+        elif session["step"] == "admin_add_domain":
+            await self.handle_add_domain(chat_id, text)
+        elif session["step"] == "admin_remove_domain":
+            await self.handle_remove_domain(chat_id, text)
 
     async def handle_smtp_and_emails(self, chat_id, text):
         """Handle combined SMTP config and email list input"""
@@ -552,6 +562,55 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
         for i, domain in enumerate(domains, 1):
             message += f"{i}. {domain['name']}\n"
         await self.send_message(chat_id, message, auto_delete=True)
+
+    async def handle_bulk_domains(self, chat_id, domain_list):
+        """Handle bulk domain import"""
+        user_id = chat_id
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+        
+        result = self.domain_manager.add_bulk_domains(domain_list)
+        
+        if result["success"]:
+            message = f"✅ Bulk import complete!\n"
+            message += f"Added: {len(result['added'])} domains\n"
+            if result['skipped']:
+                message += f"Skipped: {len(result['skipped'])} (already exist)\n"
+            await self.send_message(chat_id, message)
+        else:
+            await self.send_message(chat_id, f"❌ Error: {result.get('error', 'Unknown error')}")
+
+    async def handle_add_domain(self, chat_id, text):
+        """Handle single domain addition"""
+        user_id = chat_id
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+        
+        if "|" in text:
+            parts = text.split("|", 1)
+            name = parts[0].strip()
+            url = parts[1].strip()
+        else:
+            # Use domain as both name and URL
+            url = text.strip()
+            name = url.title()
+        
+        if self.domain_manager.add_domain(url, name):
+            await self.send_message(chat_id, f"✅ Added domain: {name}")
+        else:
+            await self.send_message(chat_id, "❌ Failed to add domain or already exists")
+
+    async def handle_remove_domain(self, chat_id, text):
+        """Handle domain removal"""
+        user_id = chat_id
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+        
+        url = text.strip()
+        if self.domain_manager.remove_domain(url):
+            await self.send_message(chat_id, f"✅ Removed domain: {url}")
+        else:
+            await self.send_message(chat_id, "❌ Domain not found")
 
     async def run(self):
         """Run the bot"""
