@@ -164,7 +164,7 @@ class SimpleTelegramBot:
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, "Enter SMTP details and 5 emails:\nserver:port:username:password:tls\nemail1,email2,email3,email4,email5")
+        await self.send_message(chat_id, "Enter SMTP details and 5 emails in any format you prefer.")
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -194,37 +194,88 @@ class SimpleTelegramBot:
         if not session:
             return
 
-        lines = text.strip().split('\n')
-        if len(lines) != 2:
-            await self.send_message(chat_id, "Invalid format. Use:\nserver:port:username:password:tls\nemail1,email2,email3,email4,email5")
+        smtp_config, emails = self.parse_smart_input(text)
+        
+        if not smtp_config:
+            await self.send_message(chat_id, "Invalid SMTP format. Include: server:port:username:password:tls")
+            return
+            
+        if not emails:
+            await self.send_message(chat_id, f"Need exactly 5 emails. Found {len(emails) if emails else 0}.")
             return
 
-        smtp_line = lines[0]
-        emails_line = lines[1]
-
-        # Parse SMTP config
-        smtp_parts = smtp_line.split(":")
-        if len(smtp_parts) != 5:
-            await self.send_message(chat_id, "Invalid SMTP format. Use: server:port:username:password:tls")
-            return
-
-        # Parse emails
-        emails = [email.strip() for email in emails_line.split(",")]
-        if len(emails) != 5:
-            await self.send_message(chat_id, f"Please enter exactly 5 emails. You entered {len(emails)}.")
-            return
-
-        # Store config
-        session["smtp_config"] = {
-            "server": smtp_parts[0], "port": smtp_parts[1], 
-            "username": smtp_parts[2], "password": smtp_parts[3], "tls": smtp_parts[4]
-        }
+        session["smtp_config"] = smtp_config
         session["emails"] = emails
-
         await self.send_message(chat_id, "Test started for 5 emails...")
         
         # Clear session
         del self.user_sessions[user_id]
+
+    def parse_smart_input(self, text):
+        """Parse various input formats smartly"""
+        import re
+        
+        # Extract emails using regex
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, text)
+        
+        if len(emails) != 5:
+            return None, None
+            
+        # Remove emails from text to find SMTP config
+        text_without_emails = text
+        for email in emails:
+            text_without_emails = text_without_emails.replace(email, "")
+            
+        # Find SMTP config patterns
+        smtp_patterns = [
+            # server:port:user:pass:tls
+            r'([a-zA-Z0-9.-]+):(\d+):([^:\s]+):([^:\s]+):(true|false|1|0)',
+            # server port user pass tls (space separated)
+            r'([a-zA-Z0-9.-]+)\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(true|false|1|0)',
+            # gmail.com 587 user@gmail.com password true
+            r'([a-zA-Z0-9.-]+)\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(true|false|1|0)'
+        ]
+        
+        smtp_config = None
+        for pattern in smtp_patterns:
+            match = re.search(pattern, text_without_emails, re.IGNORECASE)
+            if match:
+                server, port, username, password, tls = match.groups()
+                smtp_config = {
+                    "server": server.strip(),
+                    "port": port.strip(),
+                    "username": username.strip(),
+                    "password": password.strip(),
+                    "tls": tls.lower() in ['true', '1']
+                }
+                break
+                
+        if not smtp_config:
+            # Try to find individual components
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            words = text.split()
+            
+            # Look for server (contains dots)
+            server = next((w for w in words if '.' in w and '@' not in w), None)
+            # Look for port (numeric)
+            port = next((w for w in words if w.isdigit() and 25 <= int(w) <= 65535), None)
+            # Look for TLS indicator
+            tls_word = next((w for w in words if w.lower() in ['true', 'false', 'tls', 'ssl', '1', '0']), 'true')
+            
+            # Find username/password (non-email strings)
+            remaining_words = [w for w in words if w != server and w != port and w.lower() not in ['true', 'false', 'tls', 'ssl', '1', '0'] and '@' not in w]
+            
+            if server and port and len(remaining_words) >= 2:
+                smtp_config = {
+                    "server": server,
+                    "port": port,
+                    "username": remaining_words[0],
+                    "password": remaining_words[1],
+                    "tls": tls_word.lower() in ['true', '1', 'tls', 'ssl']
+                }
+        
+        return smtp_config, emails
 
 
     async def handle_smtp_config(self, chat_id, text):
