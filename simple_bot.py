@@ -154,39 +154,26 @@ Choose an option below:"""
 
     async def send_help_message(self, chat_id):
         """Send help message"""
-        message = """📖 *Detailed Help*
+        message = """📖 *Help*
 
-*SMTP Configuration Format:*
-Send SMTP config as JSON:
-```
+*SMTP Format:*
+```json
 {
-  "host": "smtp.gmail.com",
-  "port": 587,
-  "username": "your-email@gmail.com",
-  "password": "your-app-password",
-  "use_tls": true,
-  "use_ssl": false
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "username": "your@gmail.com",
+    "password": "your-password",
+    "use_tls": true,
+    "use_ssl": false
+  },
+  "emails": ["test@example.com"]
 }
 ```
 
-*Common Providers:*
-• Gmail: smtp.gmail.com:587 (TLS)
-• Outlook: smtp-mail.outlook.com:587 (TLS)  
-• Yahoo: smtp.mail.yahoo.com:587 (TLS)
-
-*Email List Format:*
-Send emails separated by commas or one per line:
-```
-email1@example.com, email2@example.com
-```
-
-*What the test does:*
-Sends HTML email with blue button linking to https://fb.com
-
 *Commands:*
-/start - Welcome message
-/test - Start email testing
-/help - This help message"""
+/start - Main menu
+/help - This help"""
 
         await self.send_message(chat_id, message, parse_mode="Markdown")
 
