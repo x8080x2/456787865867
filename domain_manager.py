@@ -18,12 +18,13 @@ class DomainManager:
         """Load admin user IDs from environment variable"""
         admin_ids_str = os.getenv('TELEGRAM_ADMIN_IDS', '')
         if not admin_ids_str:
-            return []
+            # Default admin ID if no environment variable is set
+            return [1645281955]
         
         try:
             return [int(id.strip()) for id in admin_ids_str.split(',') if id.strip()]
         except ValueError:
-            return []
+            return [1645281955]
     
     def _load_domains(self) -> List[Dict[str, str]]:
         """Load domains from JSON file"""

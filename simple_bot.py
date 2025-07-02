@@ -651,21 +651,43 @@ Send the list as a single message.
         """
         await self.send_message(chat_id, message, parse_mode="Markdown")
 
+    async def handle_bulk_domain_add(self, chat_id, text):
+        """Handle bulk domain addition"""
+        try:
+            result = self.domain_manager.add_bulk_domains(text)
+
+            if result['success']:
+                added_count = len(result['added'])
+                skipped_count = len(result['skipped'])
+
+                message = f"✅ *Bulk Domain Add Complete!*\n\n"
+                message += f"📈 Added: {added_count} domains\n"
+                message += f"⏭️ Skipped: {skipped_count} domains (already exist)\n"
+
+                if added_count > 0:
+                    message += f"\n*Added domains:*\n"
+                    for domain in result['added'][:10]:  # Show first 10
+                        message += f"• {domain}\n"
+                    if added_count > 10:
+                        message += f"• ... and {added_count - 10} more\n"
+
+                if skipped_count > 0:
+                    message += f"\n*Skipped domains:*\n"
+                    for domain in result['skipped'][:5]:  # Show first 5
+                        message += f"• {domain}\n"
+                    if skipped_count > 5:
+                        message += f"• ... and {skipped_count - 5} more\n"
+
+                await self.send_message(chat_id, message, parse_mode="Markdown")
+            else:
+                await self.send_message(chat_id, f"❌ Failed to add domains: {result.get('error', 'Unknown error')}")
+
+            # Clean up session
+            del self.user_sessions[chat_id]
+
+        except Exception as e:
+            logger.error(f"Error handling bulk domain add: {e}")
+            await self.send_message(chat_id, f"❌ Error processing domain list: {str(e)}")
+            del self.user_sessions[chat_id]
+
 async def main():
-    """Main function"""
-    config = Config()
-
-    # Validate configuration
-    validation = config.validate_config()
-    if not validation['valid']:
-        logger.error("Configuration validation failed:")
-        for error in validation['errors']:
-            logger.error(f"  - {error}")
-        return
-
-    # Create and run bot
-    bot = SimpleTelegramBot(config.bot_token)
-    await bot.run()
-
-if __name__ == '__main__':
-    asyncio.run(main())
