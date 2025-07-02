@@ -116,17 +116,7 @@ class SimpleTelegramBot:
                 del self.user_sessions[chat_id]
             await self.send_message(chat_id, "❌ Test cancelled. Use /start to begin again.")
         elif callback_data == "admin_add_domain" and self.domain_manager.is_admin(user_id):
-            await self.send_message(chat_id, "Please use the command: /add_domain <domain_url> <domain_name>\n\nExample: /{
-  "smtp": {
-    "host": "smtp.gmail.com",
-    "port": 587,
-    "username": "your@gmail.com",
-    "password": "your-password",
-    "use_tls": true,
-    "use_ssl": false
-  },
-  "emails": ["test@example.com"]
-}
+            await self.send_message(chat_id, "Please use the command: /add_domain <domain_url> <domain_name>\n\nExample: /add_domain facebook.com Facebook")
 ```
 
 *Commands:*
