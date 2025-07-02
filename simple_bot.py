@@ -79,7 +79,7 @@ class SimpleTelegramBot:
         except Exception as e:
             logger.debug(f"Error deleting message {message_id}: {e}")
 
-    async def delete_message_delayed(self, chat_id, message_id, delay=1):
+    async def delete_message_delayed(self, chat_id, message_id, delay=1.0):
         """Delete a message after a delay"""
         await asyncio.sleep(delay)
         await self.delete_message(chat_id, message_id)
@@ -89,7 +89,7 @@ class SimpleTelegramBot:
         if chat_id in self.user_message_history:
             # Delete messages in batches with small delays to avoid rate limits
             for i, message_id in enumerate(self.user_message_history[chat_id]):
-                asyncio.create_task(self.delete_message_delayed(chat_id, message_id, delay=i * 0.1))
+                asyncio.create_task(self.delete_message_delayed(chat_id, message_id, delay=float(i * 0.1)))
             self.user_message_history[chat_id] = []
 
     async def get_updates(self, offset=None):
@@ -144,12 +144,12 @@ class SimpleTelegramBot:
             [{"text": "ℹ️ Help", "callback_data": "show_help"}]
         ]
         reply_markup = json.dumps({"inline_keyboard": keyboard})
-        await self.send_message(chat_id, "Email Tester Bot - Test your SMTP delivery.", reply_markup=reply_markup)
+        await self.send_message(chat_id, "Email Tester Bot - Test your SMTP delivery.", reply_markup=reply_markup, auto_delete=False)
 
     async def send_help_message(self, chat_id):
         """Send help message"""
         message = "Commands: /start /test /domains /admin\nUse /test to start email testing."
-        await self.send_message(chat_id, message)
+        await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
         """Show domain selection to user"""
