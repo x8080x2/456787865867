@@ -176,7 +176,7 @@ class SimpleTelegramBot:
             }])
 
         reply_markup = json.dumps({"inline_keyboard": keyboard_buttons})
-        await self.send_message(chat_id, "Choose domain for test link:", reply_markup=reply_markup, auto_delete=False)
+        await self.send_message(chat_id, "Choose domain for test link:", reply_markup=reply_markup, auto_delete=True)
 
     async def send_admin_panel(self, chat_id):
         """Send admin panel"""
@@ -188,7 +188,7 @@ class SimpleTelegramBot:
             [{"text": "📋 List Domains", "callback_data": "view_domains"}]
         ]
         reply_markup = json.dumps({"inline_keyboard": keyboard})
-        await self.send_message(chat_id, "Admin Panel:", reply_markup=reply_markup)
+        await self.send_message(chat_id, "Admin Panel:", reply_markup=reply_markup, auto_delete=True)
 
     async def handle_callback_query(self, callback_query):
         """Handle inline keyboard button callbacks"""
@@ -551,7 +551,7 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
         message = "Available Domains:\n"
         for i, domain in enumerate(domains, 1):
             message += f"{i}. {domain['name']}\n"
-        await self.send_message(chat_id, message)
+        await self.send_message(chat_id, message, auto_delete=True)
 
     async def run(self):
         """Run the bot"""
