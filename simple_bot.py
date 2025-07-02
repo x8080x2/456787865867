@@ -27,8 +27,9 @@ class SimpleTelegramBot:
         self.config = Config()
         self.domain_manager = DomainManager()
         self.user_sessions = {}
+        self.user_message_history = {}  # Track messages for cleanup
 
-    async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None):
+    async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None, auto_delete=True):
         """Send a message to a chat"""
         url = f"{self.api_url}/sendMessage"
         data = {
@@ -42,7 +43,41 @@ class SimpleTelegramBot:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, json=data)
-            return response.json()
+            result = response.json()
+            
+            # Track message for potential cleanup
+            if auto_delete and result.get("ok"):
+                message_id = result["result"]["message_id"]
+                if chat_id not in self.user_message_history:
+                    self.user_message_history[chat_id] = []
+                self.user_message_history[chat_id].append(message_id)
+                
+                # Keep only last 3 messages per chat
+                if len(self.user_message_history[chat_id]) > 3:
+                    old_message_id = self.user_message_history[chat_id].pop(0)
+                    await self.delete_message(chat_id, old_message_id)
+            
+            return result
+
+    async def delete_message(self, chat_id, message_id):
+        """Delete a message"""
+        url = f"{self.api_url}/deleteMessage"
+        data = {
+            "chat_id": chat_id,
+            "message_id": message_id
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(url, json=data)
+        except:
+            pass  # Ignore delete errors
+
+    async def clear_chat_history(self, chat_id):
+        """Clear all tracked messages for a chat"""
+        if chat_id in self.user_message_history:
+            for message_id in self.user_message_history[chat_id]:
+                await self.delete_message(chat_id, message_id)
+            self.user_message_history[chat_id] = []
 
     async def get_updates(self, offset=None):
         """Get updates from Telegram"""
@@ -100,9 +135,12 @@ class SimpleTelegramBot:
 
     async def show_domain_selection(self, chat_id):
         """Show domain selection to user"""
+        # Clear previous messages
+        await self.clear_chat_history(chat_id)
+        
         domains = self.domain_manager.get_domains()
         if not domains:
-            await self.send_message(chat_id, "No domains available. Contact admin.")
+            await self.send_message(chat_id, "No domains available. Contact admin.", auto_delete=False)
             return
 
         keyboard_buttons = []
@@ -113,7 +151,7 @@ class SimpleTelegramBot:
             }])
 
         reply_markup = json.dumps({"inline_keyboard": keyboard_buttons})
-        await self.send_message(chat_id, "Choose domain for test link:", reply_markup=reply_markup)
+        await self.send_message(chat_id, "Choose domain for test link:", reply_markup=reply_markup, auto_delete=False)
 
     async def send_admin_panel(self, chat_id):
         """Send admin panel"""
@@ -158,13 +196,16 @@ class SimpleTelegramBot:
 
     async def start_fast_test(self, chat_id, domain_url):
         """Start fast test with selected domain"""
+        # Clear chat for clean experience
+        await self.clear_chat_history(chat_id)
+        
         user_id = chat_id
         self.user_sessions[user_id] = {
             "step": "smtp_and_emails",
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, "Enter SMTP details and 5 emails in any format you prefer.")
+        await self.send_message(chat_id, "Enter SMTP details and 5 emails in any format you prefer.", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -206,7 +247,10 @@ class SimpleTelegramBot:
 
         session["smtp_config"] = smtp_config
         session["emails"] = emails
-        await self.send_message(chat_id, "Test started for 5 emails...")
+        
+        # Clear previous input message for clean chat
+        await self.clear_chat_history(chat_id)
+        await self.send_message(chat_id, "✅ Test started for 5 emails...", auto_delete=False)
         
         # Clear session
         del self.user_sessions[user_id]
