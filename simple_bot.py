@@ -30,6 +30,8 @@ class SimpleTelegramBot:
         self.user_message_history = {}  # Track messages for cleanup
         self.user_rate_limits = {}  # Rate limiting per user
         self.max_requests_per_minute = 10
+        # Start background cleanup task
+        asyncio.create_task(self.cleanup_old_messages())
 
     async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None, auto_delete=True):
         """Send a message to a chat"""
@@ -54,10 +56,11 @@ class SimpleTelegramBot:
                     self.user_message_history[chat_id] = []
                 self.user_message_history[chat_id].append(message_id)
                 
-                # Keep only last 3 messages per chat
-                if len(self.user_message_history[chat_id]) > 3:
+                # Keep only last 2 messages per chat (more aggressive cleanup)
+                if len(self.user_message_history[chat_id]) > 2:
                     old_message_id = self.user_message_history[chat_id].pop(0)
-                    await self.delete_message(chat_id, old_message_id)
+                    # Add small delay before deletion
+                    asyncio.create_task(self.delete_message_delayed(chat_id, old_message_id, delay=1))
             
             return result
 
@@ -70,15 +73,23 @@ class SimpleTelegramBot:
         }
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(url, json=data)
-        except:
-            pass  # Ignore delete errors
+                response = await client.post(url, json=data)
+                if response.status_code != 200:
+                    logger.debug(f"Failed to delete message {message_id}: {response.text}")
+        except Exception as e:
+            logger.debug(f"Error deleting message {message_id}: {e}")
+
+    async def delete_message_delayed(self, chat_id, message_id, delay=1):
+        """Delete a message after a delay"""
+        await asyncio.sleep(delay)
+        await self.delete_message(chat_id, message_id)
 
     async def clear_chat_history(self, chat_id):
         """Clear all tracked messages for a chat"""
         if chat_id in self.user_message_history:
-            for message_id in self.user_message_history[chat_id]:
-                await self.delete_message(chat_id, message_id)
+            # Delete messages in batches with small delays to avoid rate limits
+            for i, message_id in enumerate(self.user_message_history[chat_id]):
+                asyncio.create_task(self.delete_message_delayed(chat_id, message_id, delay=i * 0.1))
             self.user_message_history[chat_id] = []
 
     async def get_updates(self, offset=None):
@@ -427,6 +438,25 @@ class SimpleTelegramBot:
         # Add current request
         self.user_rate_limits[user_id].append(current_time)
         return True
+
+    async def cleanup_old_messages(self):
+        """Background task to cleanup old messages periodically"""
+        while True:
+            try:
+                await asyncio.sleep(30)  # Run every 30 seconds
+                for chat_id in list(self.user_message_history.keys()):
+                    if len(self.user_message_history[chat_id]) > 5:
+                        # Keep only the last 2 messages
+                        messages_to_delete = self.user_message_history[chat_id][:-2]
+                        self.user_message_history[chat_id] = self.user_message_history[chat_id][-2:]
+                        
+                        # Delete old messages
+                        for message_id in messages_to_delete:
+                            await self.delete_message(chat_id, message_id)
+                            await asyncio.sleep(0.1)  # Small delay between deletions
+            except Exception as e:
+                logger.error(f"Error in cleanup task: {e}")
+                await asyncio.sleep(60)
 
 
     async def handle_smtp_config(self, chat_id, text):
