@@ -10,144 +10,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 from typing import Dict, List, Any
-import ssl
 import concurrent.futures
+import datetime
 
 logger = logging.getLogger(__name__)
-
-class EmailHandler:
-    def __init__(self, smtp_config: Dict[str, Any], custom_domain: str = "fb.com"):
-        self.smtp_config = smtp_config
-        self.custom_domain = custom_domain
-
-    async def test_connection(self) -> Dict[str, Any]:
-        """Test SMTP connection"""
-        try:
-            loop = asyncio.get_event_loop()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                result = await loop.run_in_executor(executor, self._test_connection_sync)
-            return result
-        except Exception as e:
-            logger.error(f"Error testing SMTP connection: {e}")
-            return {'success': False, 'error': str(e)}
-
-    def _test_connection_sync(self) -> Dict[str, Any]:
-        """Synchronous SMTP connection test"""
-        try:
-            if self.smtp_config.get('use_ssl', False):
-                server = smtplib.SMTP_SSL(
-                    self.smtp_config['host'],
-                    self.smtp_config['port']
-                )
-            else:
-                server = smtplib.SMTP(
-                    self.smtp_config['host'],
-                    self.smtp_config['port']
-                )
-                if self.smtp_config.get('use_tls', False):
-                    server.starttls()
-
-            server.login(
-                self.smtp_config['username'],
-                self.smtp_config['password']
-            )
-            server.quit()
-            return {'success': True}
-
-        except smtplib.SMTPAuthenticationError:
-            return {'success': False, 'error': 'Authentication failed'}
-        except smtplib.SMTPConnectError:
-            return {'success': False, 'error': 'Connection failed'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    async def send_test_emails(self, email_list: List[str]) -> Dict[str, Any]:
-        """Send test emails to the provided list"""
-        successful = []
-        failed = {}
-
-        for email in email_list:
-            try:
-                loop = asyncio.get_event_loop()
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    result = await loop.run_in_executor(
-                        executor, 
-                        self._send_single_email_sync, 
-                        email
-                    )
-
-                if result['success']:
-                    successful.append(email)
-                else:
-                    failed[email] = result['error']
-
-            except Exception as e:
-                logger.error(f"Error sending email to {email}: {e}")
-                failed[email] = str(e)
-
-        return {
-            'successful': successful,
-            'failed': failed
-        }
-
-    def _send_single_email_sync(self, email: str) -> Dict[str, Any]:
-        """Send a single test email synchronously"""
-        try:
-            # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = "Email Delivery Test - Telegram Bot"
-            msg['From'] = formataddr(("Email Tester Bot", self.smtp_config['username']))
-            msg['To'] = email
-
-            # Create HTML content with custom domain
-            html_content = f'''
-            <html>
-              <body>
-                <h2>Email Delivery Test</h2>
-                <p>This is a test email sent by the Telegram Email Tester Bot.</p>
-                <p>Click the button below to test the link:</p>
-                <div style="text-align: center; margin: 20px;">
-                  <a href="https://{self.custom_domain}" target="_blank" 
-                     style="display: inline-block; text-decoration: none; background-color: blue; 
-                            color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">
-                    456756
-                  </a>
-                </div>
-                <p>If you received this email, your SMTP configuration is working correctly!</p>
-              </body>
-            </html>
-            '''
-
-            # Attach HTML content
-            html_part = MIMEText(html_content, 'html')
-            msg.attach(html_part)
-
-            # Send email
-            if self.smtp_config.get('use_ssl', False):
-                server = smtplib.SMTP_SSL(
-                    self.smtp_config['host'],
-                    self.smtp_config['port']
-                )
-            else:
-                server = smtplib.SMTP(
-                    self.smtp_config['host'],
-                    self.smtp_config['port']
-                )
-                if self.smtp_config.get('use_tls', False):
-                    server.starttls()
-
-            server.login(
-                self.smtp_config['username'],
-                self.smtp_config['password']
-            )
-            
-            server.send_message(msg)
-            server.quit()
-
-            return {'success': True}
-
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
 
 class EmailHandler:
     def __init__(self, smtp_config: Dict[str, Any], custom_domain: str = None):
@@ -160,13 +26,14 @@ class EmailHandler:
         self.use_tls = smtp_config.get('use_tls', True)
         self.use_ssl = smtp_config.get('use_ssl', False)
         self.custom_domain = custom_domain or "fb.com"
-        
+
     async def test_connection(self) -> Dict[str, Any]:
         """Test SMTP connection"""
         try:
             # Run connection test in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self._test_connection_sync)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                result = await loop.run_in_executor(executor, self._test_connection_sync)
             return result
         except Exception as e:
             logger.error(f"Connection test error: {e}")
@@ -174,30 +41,25 @@ class EmailHandler:
                 'success': False,
                 'error': f"Connection test failed: {str(e)}"
             }
-    
+
     def _test_connection_sync(self) -> Dict[str, Any]:
         """Synchronous SMTP connection test"""
         try:
             if self.use_ssl:
-                # Use SSL connection
                 server = smtplib.SMTP_SSL(self.host, self.port)
             else:
-                # Use regular connection
                 server = smtplib.SMTP(self.host, self.port)
-                
                 if self.use_tls:
-                    # Start TLS if required
                     server.starttls()
-            
-            # Login to verify credentials
+
             server.login(self.username, self.password)
             server.quit()
-            
+
             return {
                 'success': True,
                 'message': 'SMTP connection successful'
             }
-            
+
         except smtplib.SMTPAuthenticationError as e:
             return {
                 'success': False,
@@ -218,13 +80,14 @@ class EmailHandler:
                 'success': False,
                 'error': f"Connection error: {str(e)}"
             }
-    
+
     async def send_test_emails(self, email_list: List[str]) -> Dict[str, Any]:
         """Send test emails to the provided list"""
         try:
             # Run email sending in thread pool
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self._send_emails_sync, email_list)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                result = await loop.run_in_executor(executor, self._send_emails_sync, email_list)
             return result
         except Exception as e:
             logger.error(f"Email sending error: {e}")
@@ -232,12 +95,12 @@ class EmailHandler:
                 'successful': [],
                 'failed': {email: str(e) for email in email_list}
             }
-    
+
     def _send_emails_sync(self, email_list: List[str]) -> Dict[str, Any]:
         """Synchronous email sending"""
         successful = []
         failed = {}
-        
+
         try:
             # Establish SMTP connection
             if self.use_ssl:
@@ -246,9 +109,9 @@ class EmailHandler:
                 server = smtplib.SMTP(self.host, self.port)
                 if self.use_tls:
                     server.starttls()
-            
+
             server.login(self.username, self.password)
-            
+
             # Send emails one by one
             for email in email_list:
                 try:
@@ -256,24 +119,24 @@ class EmailHandler:
                     server.send_message(message)
                     successful.append(email)
                     logger.info(f"Email sent successfully to {email}")
-                    
+
                 except Exception as e:
                     failed[email] = str(e)
                     logger.error(f"Failed to send email to {email}: {e}")
-            
+
             server.quit()
-            
+
         except Exception as e:
             # If connection fails, mark all emails as failed
             for email in email_list:
                 if email not in successful and email not in failed:
                     failed[email] = f"SMTP connection error: {str(e)}"
-        
+
         return {
             'successful': successful,
             'failed': failed
         }
-    
+
     def _create_test_message(self, recipient_email: str) -> MIMEMultipart:
         """Create the test email message with HTML content"""
         # Create message
@@ -281,7 +144,7 @@ class EmailHandler:
         message['From'] = formataddr(('Email Tester Bot', self.username))
         message['To'] = recipient_email
         message['Subject'] = 'Email Delivery Test - Telegram Bot'
-        
+
         # HTML content with the specified link
         html_content = f"""
 <!DOCTYPE html>
@@ -296,15 +159,15 @@ class EmailHandler:
         <h1 style="color: #2c3e50; margin-bottom: 10px;">📧 Email Delivery Test</h1>
         <p style="margin-bottom: 0; color: #666;">This is a test email sent via Telegram Email Tester Bot</p>
     </div>
-    
+
     <div style="background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 20px;">
         <h2 style="color: #495057; margin-top: 0;">Test Link</h2>
         <p>Click the button below to test the HTML link functionality:</p>
-        
+
         <div style="text-align: center; margin: 30px 0;">
             <a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
         </div>
-        
+
         <p style="font-size: 14px; color: #6c757d;">
             <strong>Link Details:</strong><br>
             • URL: https://{self.custom_domain}<br>
@@ -312,22 +175,22 @@ class EmailHandler:
             • Style: Blue background, white text, bold font
         </p>
     </div>
-    
+
     <div style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
         <h3 style="color: #155724; margin-top: 0;">✅ Test Results</h3>
         <p style="color: #155724; margin-bottom: 0;">
             If you received this email, your SMTP configuration is working correctly!
         </p>
     </div>
-    
+
     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
         <p>This email was sent by Telegram Email Tester Bot</p>
-        <p>Timestamp: {{timestamp}}</p>
+        <p>Timestamp: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
     </div>
 </body>
 </html>
         """
-        
+
         # Plain text version for clients that don't support HTML
         text_content = f"""
 Email Delivery Test - Telegram Bot
@@ -342,18 +205,13 @@ If you received this email, your SMTP configuration is working correctly!
 ---
 This email was sent by Telegram Email Tester Bot
         """
-        
-        # Add timestamp
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
-        html_content = html_content.format(timestamp=timestamp)
-        
+
         # Create message parts
         text_part = MIMEText(text_content, 'plain')
         html_part = MIMEText(html_content, 'html')
-        
+
         # Attach parts
         message.attach(text_part)
         message.attach(html_part)
-        
+
         return message

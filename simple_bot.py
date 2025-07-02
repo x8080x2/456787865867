@@ -4,7 +4,6 @@ Simple Telegram Email Tester Bot
 A basic implementation without complex telegram.ext dependencies
 """
 
-import os
 import json
 import asyncio
 import logging
@@ -356,6 +355,8 @@ Current domains: {len(domains)}
             await self.handle_smtp_config(chat_id, text)
         elif session['state'] == 'waiting_emails':
             await self.handle_email_list(chat_id, text)
+        elif session['state'] == 'waiting_bulk_domains':
+            await self.handle_bulk_domain_add(chat_id, text)
 
     async def handle_smtp_preset(self, chat_id, preset_name):
         """Handle SMTP preset selection"""
@@ -634,21 +635,23 @@ Replace YOUR_EMAIL_HERE and YOUR_APP_PASSWORD_HERE with your actual credentials,
 
     async def send_bulk_add_instructions(self, chat_id):
         """Send instructions for bulk adding domains."""
-        message = """
-👑 *Bulk Add Domains Instructions* 👑
+        # Set up session for bulk add
+        self.user_sessions[chat_id] = {
+            'state': 'waiting_bulk_domains'
+        }
 
-To add multiple domains at once, send them in the following format:
+        message = """👑 *Bulk Add Domains Instructions*
+
+Send me a list of domains, one per line:
 
 ```
-domain1.com Domain Name 1
-domain2.net Domain Name 2
-domain3.org Domain Name 3
-...
+domain1.com
+domain2.net  
+domain3.org
+example.com
 ```
 
-Each line should contain the domain URL and its corresponding name, separated by a space.
-Send the list as a single message.
-        """
+I'll add them all at once and show you the results."""
         await self.send_message(chat_id, message, parse_mode="Markdown")
 
     async def handle_bulk_domain_add(self, chat_id, text):
