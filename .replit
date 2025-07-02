@@ -27,3 +27,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python simple_bot.py"
+
+[nix]
+channel = "stable-24_05"
