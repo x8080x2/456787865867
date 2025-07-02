@@ -236,7 +236,12 @@ class SimpleTelegramBot:
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, "Enter SMTP details and 1-5 emails in any format you prefer.", auto_delete=False)
+        await self.send_message(chat_id, """Enter SMTP details and 1-5 emails in any format you prefer:
+SMTPserver PORT USER PASS SSL
+Email1 Email2 Email3 Email4 Email5
+
+Sample: smtp.mail.me.com 587 aristobvan@icloud.com b55o-nvam-psex-zfghw true 
+fdg@suyei.com bas70@gmail.com""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""

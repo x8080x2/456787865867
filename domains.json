@@ -1,18 +1,6 @@
 {
   "domains": [
     {
-      "url": "facebook.com",
-      "name": "Facebook"
-    },
-    {
-      "url": "google.com",
-      "name": "Google"
-    },
-    {
-      "url": "example.com",
-      "name": "Example"
-    },
-    {
       "url": "10noemvri.info",
       "name": "10Noemvri.Info"
     },
@@ -80,10 +68,7 @@
       "url": "besteauktion.info",
       "name": "Besteauktion.Info"
     },
-    {
-      "url": "expireddomains.net",
-      "name": "Expireddomains.Net"
-    },
+   
     {
       "url": "jaden-john.info",
       "name": "Jaden-John.Info"
