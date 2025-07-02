@@ -92,6 +92,71 @@ class DomainManager:
                 return domain
         return {}
     
+    def add_bulk_domains(self, domain_list: str) -> dict:
+        """Add multiple domains from a text list"""
+        lines = [line.strip() for line in domain_list.strip().split('\n') if line.strip()]
+        
+        added = []
+        skipped = []
+        errors = []
+        
+        for line in lines:
+            # Skip empty lines or comments
+            if not line or line.startswith('#'):
+                continue
+                
+            # Clean up domain
+            domain_url = line
+            if domain_url.startswith('http://'):
+                domain_url = domain_url[7:]
+            elif domain_url.startswith('https://'):
+                domain_url = domain_url[8:]
+            
+            domain_url = domain_url.rstrip('/')
+            
+            # Use domain as both URL and name for bulk add
+            domain_name = domain_url.title()
+            
+            # Check if domain already exists
+            exists = False
+            for domain in self.domains:
+                if domain['url'] == domain_url:
+                    skipped.append(domain_url)
+                    exists = True
+                    break
+            
+            if not exists:
+                self.domains.append({
+                    'url': domain_url,
+                    'name': domain_name
+                })
+                added.append(domain_url)
+        
+        # Save all changes at once
+        if added:
+            if self._save_domains():
+                return {
+                    'success': True,
+                    'added': added,
+                    'skipped': skipped,
+                    'errors': errors
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'Failed to save domains',
+                    'added': [],
+                    'skipped': skipped,
+                    'errors': errors
+                }
+        
+        return {
+            'success': True,
+            'added': added,
+            'skipped': skipped,
+            'errors': errors
+        }
+    
     def clear_all_domains(self) -> bool:
         """Clear all domains (admin only)"""
         self.domains = []
