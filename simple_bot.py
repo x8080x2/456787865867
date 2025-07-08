@@ -168,7 +168,12 @@ gjunca@aquatherm.lat
 ana@specialtyofficeproduct.com
 
 AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com"""
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com
+
+For AWS SES:
+- Use SMTP credentials from AWS SES Console → SMTP Settings
+- Sender email must be verified in AWS SES Console → Verified Identities  
+- Username format: AKIA... (SMTP username, not AWS Access Key)"""
         await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
@@ -529,7 +534,10 @@ Error: {error_msg}""")
                     await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
                 return
             
-            await self.send_message(chat_id, "✅ SMTP connection successful!")
+            if 'amazonaws.com' in smtp_config['server']:
+                await self.send_message(chat_id, f"✅ AWS SES connection successful! Sender: {smtp_config.get('from_email', smtp_config['username'])}")
+            else:
+                await self.send_message(chat_id, "✅ SMTP connection successful!")
             
             # Send emails
             result = await email_handler.send_test_emails(emails)
