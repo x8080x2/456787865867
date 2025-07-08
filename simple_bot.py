@@ -564,16 +564,22 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
         if not session:
             return
 
-        parts = text.split(":")
-        if len(parts) != 5:
-            await self.send_message(chat_id, "Invalid format. Use: server:port:username:password:tls")
+        # Use smart parsing for SMTP config
+        parsed_result = self.parse_smart_input(text)
+        if not parsed_result['smtp_config']:
+            await self.send_message(chat_id, """❌ Invalid SMTP format.
+
+Expected Format:
+server port username password from_email tls_setting recipient_emails...
+
+Example:
+smtp.mail.me.com 587 user@icloud.com password user@icloud.com true recipient@test.com
+
+AWS SES Example:
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com""")
             return
             
-        session["smtp_config"] = {
-            "server": parts[0], "port": parts[1], 
-            "username": parts[2], "password": parts[3], "tls": parts[4]
-        }
-
+        session["smtp_config"] = parsed_result['smtp_config']
         session["step"] = "email_list"
         await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
 
