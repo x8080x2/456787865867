@@ -79,8 +79,8 @@ class Config:
 DEFAULT_TEST_EMAIL_SUBJECT = "Email Delivery Test - Telegram Bot"
 DEFAULT_SENDER_NAME = "Email Tester Bot"
 
-# HTML template for the test email link
-TEST_LINK_HTML = '''<a href="https://fb.com" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>'''
+# HTML template for the test email link (dynamic values will be substituted at runtime)
+TEST_LINK_HTML = '''<a href="https://{domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">{button_text}</a>'''
 
 # Common SMTP ports and their typical configurations
 SMTP_PORT_INFO = {

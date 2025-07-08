@@ -26,7 +26,7 @@ class EmailHandler:
         self.from_email = smtp_config.get('from_email', smtp_config['username'])  # Use from_email if provided, otherwise username
         self.use_tls = smtp_config.get('use_tls', True)
         self.use_ssl = smtp_config.get('use_ssl', False)
-        self.custom_domain = custom_domain or "fb.com"
+        self.custom_domain = custom_domain or "example.com"
 
     async def test_connection(self) -> Dict[str, Any]:
         """Test SMTP connection"""
@@ -224,8 +224,10 @@ class EmailHandler:
         message['Subject'] = 'Email Delivery Test - Telegram Bot'
 
         # HTML content with the specified link
+        import random
+        button_text = str(random.randint(100000, 999999))
         html_content = f"""
-<a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">456756</a>
+<a href="https://{self.custom_domain}" target="_blank" style="display: inline-block; text-decoration: none; background-color: blue; color: white; padding: 10px 20px; border-radius: 4px; font-weight: bold;">{button_text}</a>
         <p style="font-size: 14px; color: #6c757d;">
             • URL: https://{self.custom_domain}<br>
         </p> <p>Timestamp: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
@@ -238,7 +240,7 @@ Email Delivery Test - Telegram Bot
 This is a test email sent via Telegram Email Tester Bot.
 
 Test Link: https://{self.custom_domain}
-Button Text: 456756
+Button Text: {button_text}
 
 If you received this email, your SMTP configuration is working correctly!
 

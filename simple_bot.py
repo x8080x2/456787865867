@@ -163,9 +163,9 @@ Expected Format:
 server port username password from_email tls_setting recipient_emails...
 
 Example:
-smtp.mail.me.com 587 aristoblisdrlevan@icloud.com buoo-nvam-psex-zmaw aristoblisdrlevan@icloud.com true DANW@e-mc7.com
-gjunca@aquatherm.lat
-ana@specialtyofficeproduct.com
+smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
+recipient2@example.com
+recipient3@example.com
 
 AWS SES Example:
 email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com
@@ -266,9 +266,9 @@ For AWS SES:
 Format: server port username password from_email tls_setting recipient_emails...
 
 Sample:
-smtp.mail.me.com 587 aristoblisdrlevan@icloud.com buoo-nvam-psex-zmaw aristoblisdrlevan@icloud.com true DANW@e-mc7.com
-gjunca@aquatherm.lat
-ana@specialtyofficeproduct.com
+smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
+recipient2@example.com
+recipient3@example.com
 
 You can put recipient emails on the same line or separate lines.""", auto_delete=False)
 
@@ -335,9 +335,9 @@ server port password username from_email tls_setting
 
 Example:
 email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
-DANW@e-mc7.com
-gjunca@aquatherm.lat
-ana@specialtyofficeproduct.com""")
+recipient1@example.com
+recipient2@example.com
+recipient3@example.com""")
             return
 
         if not emails:
@@ -614,9 +614,9 @@ server port password username from_email tls_setting
 
 Example:
 email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
-DANW@e-mc7.com
-gjunca@aquatherm.lat
-ana@specialtyofficeproduct.com""")
+recipient1@example.com
+recipient2@example.com
+recipient3@example.com""")
             return
 
         session["smtp_config"] = parsed_result['smtp_config']
