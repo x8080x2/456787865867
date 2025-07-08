@@ -48,7 +48,14 @@ class EmailHandler:
         server = None
         try:
             # Special handling for different SMTP providers
-            if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+            if 'amazonaws.com' in self.host or 'aws' in self.host.lower():
+                # AWS SES SMTP
+                if self.port == 465:
+                    server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
+                else:
+                    server = smtplib.SMTP(self.host, self.port, timeout=15)
+                    server.starttls()
+            elif 'mail.me.com' in self.host or 'icloud' in self.host.lower():
                 # iCloud SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=15)
                 server.starttls()
@@ -64,7 +71,7 @@ class EmailHandler:
                 # Yahoo SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=15)
                 server.starttls()
-            elif self.use_ssl:
+            elif self.use_ssl or self.port == 465:
                 # SSL connection
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
             else:
@@ -132,7 +139,14 @@ class EmailHandler:
 
         try:
             # Establish SMTP connection with timeout
-            if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+            if 'amazonaws.com' in self.host or 'aws' in self.host.lower():
+                # AWS SES SMTP
+                if self.port == 465:
+                    server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
+                else:
+                    server = smtplib.SMTP(self.host, self.port, timeout=20)
+                    server.starttls()
+            elif 'mail.me.com' in self.host or 'icloud' in self.host.lower():
                 # iCloud SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=20)
                 server.starttls()
@@ -148,7 +162,7 @@ class EmailHandler:
                 # Yahoo SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=20)
                 server.starttls()
-            elif self.use_ssl:
+            elif self.use_ssl or self.port == 465:
                 # SSL connection
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
             else:

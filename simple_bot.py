@@ -165,7 +165,10 @@ server port username password from_email tls_setting recipient_emails...
 Example:
 smtp.mail.me.com 587 aristoblisdrlevan@icloud.com buoo-nvam-psex-zmaw aristoblisdrlevan@icloud.com true DANW@e-mc7.com
 gjunca@aquatherm.lat
-ana@specialtyofficeproduct.com"""
+ana@specialtyofficeproduct.com
+
+AWS SES Example:
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com"""
         await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
