@@ -258,11 +258,13 @@ The from_email field is optional. If not provided, username will be used as send
 SMTPserver PORT USER PASS SSL
 Email1 Email2 Email3 Email4 Email5
 
-Sample with custom from email:
-smtp.mail.me.com 587 user@icloud.com pass123 sender@custom.com recipient1@test.com recipient2@test.com
+Sample format:
+smtp.mail.me.com 587 user@icloud.com pass123 sender@custom.com true
+recipient1@test.com
+recipient2@test.com
 
-Sample with username as sender:
-smtp.gmail.com 587 user@gmail.com pass123 recipient1@test.com recipient2@test.com""", auto_delete=False)
+Your format: server port username password from_email tls_setting
+Then list recipient emails (one per line)""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -389,32 +391,47 @@ smtp.gmail.com 587 user@gmail.com pass123 recipient1@test.com recipient2@test.co
                 port = word
                 break
         
-        # Find username (email address in the line) - prefer the first email found
+        # Find username and from_email in the SMTP line
         username = None
         from_email = None
-        for email in emails:
-            if email in smtp_line:
-                if not username:
-                    username = email  # First email is username
-                else:
-                    from_email = email  # Second email could be from_email
-                    break
+        smtp_emails = []
         
-        # If only one email found, use it for both username and from_email
-        if username and not from_email:
-            from_email = username
+        # Collect all emails in the SMTP line (excluding recipient emails)
+        for word in words:
+            if '@' in word and word in emails:
+                smtp_emails.append(word)
         
-        # Find password (word that comes after username but isn't an email)
+        if len(smtp_emails) >= 2:
+            # If we have 2+ emails in SMTP line: first is username, second is from_email
+            username = smtp_emails[0]
+            from_email = smtp_emails[1]
+        elif len(smtp_emails) == 1:
+            # If only one email in SMTP line, use it for both
+            username = smtp_emails[0]
+            from_email = smtp_emails[0]
+        
+        # Fallback: use first email found anywhere
+        if not username and emails:
+            username = emails[0]
+            from_email = emails[0]
+        
+        # Find password (word that comes after username but before from_email/TLS)
         password = None
         if username:
-            words_after_username = []
-            found_username = False
-            for word in words:
+            username_index = -1
+            for i, word in enumerate(words):
                 if username in word:
-                    found_username = True
-                elif found_username and '@' not in word and word not in ['true', 'false', '1', '0']:
-                    password = word
+                    username_index = i
                     break
+            
+            # Look for password after username
+            if username_index >= 0:
+                for i in range(username_index + 1, len(words)):
+                    word = words[i]
+                    # Skip emails and boolean values
+                    if '@' not in word and word.lower() not in ['true', 'false', '1', '0'] and '.' not in word:
+                        password = word
+                        break
         
         # Determine TLS setting - default to True, especially for common providers
         tls = True
@@ -441,16 +458,21 @@ smtp.gmail.com 587 user@gmail.com pass123 recipient1@test.com recipient2@test.co
                 "tls": tls
             }
         
-        # Filter out SMTP username from recipient emails
+        # Filter out SMTP username and from_email from recipient emails
         recipient_emails = []
         for email in emails:
-            if smtp_config and email != smtp_config.get("username"):
+            if smtp_config:
+                # Exclude both username and from_email from recipients
+                if email != smtp_config.get("username") and email != smtp_config.get("from_email"):
+                    recipient_emails.append(email)
+            else:
                 recipient_emails.append(email)
         
-        # If no recipients found, use all emails except username
+        # If no recipients found, use all emails except SMTP-related ones
         if not recipient_emails and emails:
             if smtp_config:
-                recipient_emails = [email for email in emails if email != smtp_config.get("username")]
+                smtp_emails_set = {smtp_config.get("username"), smtp_config.get("from_email")}
+                recipient_emails = [email for email in emails if email not in smtp_emails_set]
             else:
                 recipient_emails = emails
         
