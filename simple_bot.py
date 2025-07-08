@@ -155,7 +155,18 @@ class SimpleTelegramBot:
 
     async def send_help_message(self, chat_id):
         """Send help message"""
-        message = "Commands: /start /test /domains /admin\nUse /test to start email testing."
+        message = """Commands: /start /test /domains /admin
+
+Use /test to start email testing.
+
+SMTP Configuration Format:
+server port username password [from_email] [recipients...]
+
+Examples:
+• smtp.gmail.com 587 user@gmail.com pass123 to1@test.com to2@test.com
+• smtp.outlook.com 587 user@outlook.com pass123 sender@custom.com recipient@test.com
+
+The from_email field is optional. If not provided, username will be used as sender."""
         await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
@@ -247,8 +258,11 @@ class SimpleTelegramBot:
 SMTPserver PORT USER PASS SSL
 Email1 Email2 Email3 Email4 Email5
 
-Sample: smtp.mail.me.com 587 aristobvan@icloud.com b55o-nvam-psex-zfghw true 
-fdg@suyei.com bas70@gmail.com""", auto_delete=False)
+Sample with custom from email:
+smtp.mail.me.com 587 user@icloud.com pass123 sender@custom.com recipient1@test.com recipient2@test.com
+
+Sample with username as sender:
+smtp.gmail.com 587 user@gmail.com pass123 recipient1@test.com recipient2@test.com""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -375,14 +389,20 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
                 port = word
                 break
         
-        # Find username (email address in the line)
+        # Find username (email address in the line) - prefer the first email found
         username = None
+        from_email = None
         for email in emails:
             if email in smtp_line:
-                # Check position - if it appears early, it's likely the username
-                email_pos = smtp_line.find(email)
-                username = email
-                break
+                if not username:
+                    username = email  # First email is username
+                else:
+                    from_email = email  # Second email could be from_email
+                    break
+        
+        # If only one email found, use it for both username and from_email
+        if username and not from_email:
+            from_email = username
         
         # Find password (word that comes after username but isn't an email)
         password = None
@@ -417,6 +437,7 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
                 "port": port.strip(),
                 "username": username.strip(),
                 "password": password.strip(),
+                "from_email": from_email.strip() if from_email else username.strip(),
                 "tls": tls
             }
         
@@ -444,6 +465,7 @@ fdg@suyei.com bas70@gmail.com""", auto_delete=False)
                 'port': int(smtp_config['port']),
                 'username': smtp_config['username'],
                 'password': smtp_config['password'],
+                'from_email': smtp_config.get('from_email', smtp_config['username']),
                 'use_tls': smtp_config['tls'],
                 'use_ssl': False
             }

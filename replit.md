@@ -108,6 +108,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **July 08, 2025**: Enhanced SMTP Configuration with Custom From Email Support
+  - ✓ Added from_email field to SMTP configuration allowing separate sender and authentication emails
+  - ✓ Updated email handler to use custom from_email when provided, fallback to username
+  - ✓ Enhanced smart parsing to detect and handle multiple email addresses in configuration
+  - ✓ Updated help documentation with new format examples and usage instructions
+  - **Enhancement**: Users can now specify different sender email addresses for better deliverability
+
 - **July 08, 2025**: Successfully migrated and deployed Telegram Email Tester Bot to Replit
   - ✓ Migrated project from Replit Agent to standard Replit environment
   - ✓ Installed and configured all required dependencies (httpx, python-telegram-bot, telegram)

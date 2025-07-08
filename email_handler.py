@@ -23,6 +23,7 @@ class EmailHandler:
         self.port = smtp_config['port']
         self.username = smtp_config['username']
         self.password = smtp_config['password']
+        self.from_email = smtp_config.get('from_email', smtp_config['username'])  # Use from_email if provided, otherwise username
         self.use_tls = smtp_config.get('use_tls', True)
         self.use_ssl = smtp_config.get('use_ssl', False)
         self.custom_domain = custom_domain or "fb.com"
@@ -174,7 +175,7 @@ class EmailHandler:
         """Create the test email message with HTML content"""
         # Create message
         message = MIMEMultipart('alternative')
-        message['From'] = formataddr(('Email Tester Bot', self.username))
+        message['From'] = formataddr(('Email Tester Bot', self.from_email))
         message['To'] = recipient_email
         message['Subject'] = 'Email Delivery Test - Telegram Bot'
 
