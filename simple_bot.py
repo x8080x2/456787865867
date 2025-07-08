@@ -48,20 +48,20 @@ class SimpleTelegramBot:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, json=data)
             result = response.json()
-            
+
             # Track message for potential cleanup
             if auto_delete and result.get("ok"):
                 message_id = result["result"]["message_id"]
                 if chat_id not in self.user_message_history:
                     self.user_message_history[chat_id] = []
                 self.user_message_history[chat_id].append(message_id)
-                
+
                 # Keep only last 2 messages per chat (more aggressive cleanup)
                 if len(self.user_message_history[chat_id]) > 2:
                     old_message_id = self.user_message_history[chat_id].pop(0)
                     # Add small delay before deletion
                     asyncio.create_task(self.delete_message_delayed(chat_id, old_message_id, delay=1))
-            
+
             return result
 
     async def delete_message(self, chat_id, message_id):
@@ -180,7 +180,7 @@ For AWS SES:
         """Show domain selection to user"""
         # Clear previous messages
         await self.clear_chat_history(chat_id)
-        
+
         domains = self.domain_manager.get_domains()
         if not domains:
             await self.send_message(chat_id, "No domains available. Contact admin.", auto_delete=False)
@@ -254,13 +254,13 @@ For AWS SES:
         """Start fast test with selected domain"""
         # Clear chat for clean experience
         await self.clear_chat_history(chat_id)
-        
+
         user_id = chat_id
         self.user_sessions[user_id] = {
             "step": "smtp_and_emails",
             "domain_url": domain_url
         }
-        
+
         await self.send_message(chat_id, """Enter SMTP details and recipient emails:
 
 Format: server port username password from_email tls_setting recipient_emails...
@@ -302,7 +302,7 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
         session = self.user_sessions.get(user_id)
         if not session:
             return
-        
+
         if session["step"] == "smtp_and_emails":
             await self.handle_smtp_and_emails(chat_id, text)
         elif session["step"] == "smtp_config":
@@ -326,55 +326,58 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
         parsed_result = self.parse_smart_input(text)
         smtp_config = parsed_result['smtp_config']
         emails = parsed_result['emails']
-        
+
         if not smtp_config:
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
-Expected Format:
-server port username password from_email tls_setting recipient_emails...
+Required Format (6 parameters + recipient emails):
+server port username password from_email tls_setting
 
 Example:
-smtp.mail.me.com 587 user@icloud.com password user@icloud.com true recipient@test.com
+smtp.mail.me.com 587 user@icloud.com password user@icloud.com true
+recipient@test.com
 
 AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com""")
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
+DANW@e-mc7.com
+gjunca@aquatherm.lat""")
             return
-            
+
         if not emails:
             await self.send_message(chat_id, f"Need 1-5 emails. Found {len(emails) if emails else 0}.")
             return
 
         session["smtp_config"] = smtp_config
         session["emails"] = emails
-        
+
         # Clear previous input message for clean chat
         await self.clear_chat_history(chat_id)
         await self.send_message(chat_id, f"✅ Test started for {len(emails)} email(s)...", auto_delete=False)
-        
+
         # Send emails asynchronously
         await self.send_test_emails(chat_id, smtp_config, emails, session["domain_url"])
-        
+
         # Clear session
         del self.user_sessions[user_id]
 
     def parse_smart_input(self, text):
         """Parse various input formats smartly"""
         import re
-        
+
         # Split text into lines for better parsing
         lines = [line.strip() for line in text.split('\n') if line.strip()]
-        
+
         # Extract emails using regex from all text
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         emails = re.findall(email_pattern, text)
-        
+
         # Accept 1-5 emails
         if len(emails) < 1 or len(emails) > 5:
             return {
                 'smtp_config': None,
                 'emails': None
             }
-        
+
         # Find SMTP config line (usually the first line or line without standalone emails)
         smtp_line = None
         for line in lines:
@@ -383,44 +386,44 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
             line_without_emails = line
             for email in line_emails:
                 line_without_emails = line_without_emails.replace(email, "")
-            
+
             # Check if this line has SMTP config (server, port, username, password)
             words = line_without_emails.split()
             if len(words) >= 3:  # At least server, port, some other info
                 smtp_line = line
                 break
-        
+
         if not smtp_line:
             # Fallback: use the first line
             smtp_line = lines[0] if lines else text
-            
+
         # Parse SMTP configuration from the line
         words = smtp_line.split()
-        
+
         # Look for server (contains dots, not an email)
         server = None
         for word in words:
             if '.' in word and '@' not in word and not word.isdigit():
                 server = word
                 break
-        
+
         # Look for port (numeric, common SMTP ports)
         port = None
         for word in words:
             if word.isdigit() and 25 <= int(word) <= 65535:
                 port = word
                 break
-        
+
         # Find username and from_email by position in the SMTP line
         username = None
         from_email = None
-        
+
         # Look for emails in the SMTP line by position
         email_positions = []
         for i, word in enumerate(words):
             if '@' in word:
                 email_positions.append((i, word))
-        
+
         if len(email_positions) >= 2:
             # First email is username, second is from_email
             username = email_positions[0][1]
@@ -429,12 +432,12 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
             # Only one email, use for both
             username = email_positions[0][1]
             from_email = email_positions[0][1]
-        
+
         # Fallback: use first email found anywhere
         if not username and emails:
             username = emails[0]
             from_email = emails[0]
-        
+
         # Find password (word that comes after username)
         password = None
         if username:
@@ -443,14 +446,14 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                 if word == username:  # Exact match
                     username_index = i
                     break
-            
+
             # Look for password before username (should be the word immediately before the first email)
             if username_index >= 1:
                 prev_word = words[username_index - 1]
                 # Password should be the word immediately before username
                 if '@' not in prev_word and prev_word.lower() not in ['true', 'false', '1', '0'] and not prev_word.isdigit() and '.' not in prev_word:
                     password = prev_word
-        
+
         # Determine TLS setting - default to True, especially for common providers
         tls = True
         if server and ('mail.me.com' in server or 'icloud' in server.lower()):
@@ -463,7 +466,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                 if word.lower() in ['true', 'false', '1', '0']:
                     tls = word.lower() in ['true', '1']
                     break
-        
+
         # Build SMTP config if we have minimum required fields
         smtp_config = None
         if server and port and username and password:
@@ -475,7 +478,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                 "from_email": from_email.strip() if from_email else username.strip(),
                 "tls": tls
             }
-        
+
         # Filter out SMTP username and from_email from recipient emails
         recipient_emails = []
         for email in emails:
@@ -485,7 +488,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                     recipient_emails.append(email)
             else:
                 recipient_emails.append(email)
-        
+
         # If no recipients found, use all emails except SMTP-related ones
         if not recipient_emails and emails:
             if smtp_config:
@@ -493,7 +496,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                 recipient_emails = [email for email in emails if email not in smtp_emails_set]
             else:
                 recipient_emails = emails
-        
+
         return {
             'smtp_config': smtp_config,
             'emails': recipient_emails
@@ -512,9 +515,9 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                 'use_tls': smtp_config['tls'],
                 'use_ssl': False
             }
-            
+
             email_handler = EmailHandler(config, domain_url)
-            
+
             # Test connection first
             await self.send_message(chat_id, "🔄 Testing SMTP connection...")
             connection_result = await email_handler.test_connection()
@@ -533,25 +536,25 @@ Error: {error_msg}""")
                 else:
                     await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
                 return
-            
+
             if 'amazonaws.com' in smtp_config['server']:
                 await self.send_message(chat_id, f"✅ AWS SES connection successful! Sender: {smtp_config.get('from_email', smtp_config['username'])}")
             else:
                 await self.send_message(chat_id, "✅ SMTP connection successful!")
-            
+
             # Send emails
             result = await email_handler.send_test_emails(emails)
-            
+
             # Report results
             successful = result['successful']
             failed = result['failed']
-            
+
             if successful:
                 await self.send_message(chat_id, f"✅ Successfully sent to {len(successful)} email(s)")
-            
+
             if failed:
                 await self.send_message(chat_id, f"❌ Failed to send to {len(failed)} email(s)")
-                
+
         except Exception as e:
             await self.send_message(chat_id, f"❌ Error: {str(e)}")
 
@@ -559,20 +562,20 @@ Error: {error_msg}""")
         """Check if user is within rate limits"""
         import time
         current_time = time.time()
-        
+
         if user_id not in self.user_rate_limits:
             self.user_rate_limits[user_id] = []
-        
+
         # Remove old requests (older than 1 minute)
         self.user_rate_limits[user_id] = [
             req_time for req_time in self.user_rate_limits[user_id] 
             if current_time - req_time < 60
         ]
-        
+
         # Check if user has exceeded limit
         if len(self.user_rate_limits[user_id]) >= self.max_requests_per_minute:
             return False
-        
+
         # Add current request
         self.user_rate_limits[user_id].append(current_time)
         return True
@@ -587,7 +590,7 @@ Error: {error_msg}""")
                         # Keep only the last 2 messages
                         messages_to_delete = self.user_message_history[chat_id][:-2]
                         self.user_message_history[chat_id] = self.user_message_history[chat_id][-2:]
-                        
+
                         # Delete old messages
                         for message_id in messages_to_delete:
                             await self.delete_message(chat_id, message_id)
@@ -609,16 +612,19 @@ Error: {error_msg}""")
         if not parsed_result['smtp_config']:
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
-Expected Format:
-server port username password from_email tls_setting recipient_emails...
+Required Format (6 parameters + recipient emails):
+server port username password from_email tls_setting
 
 Example:
-smtp.mail.me.com 587 user@icloud.com password user@icloud.com true recipient@test.com
+smtp.mail.me.com 587 user@icloud.com password user@icloud.com true
+recipient@test.com
 
 AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com""")
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
+DANW@e-mc7.com
+gjunca@aquatherm.lat""")
             return
-            
+
         session["smtp_config"] = parsed_result['smtp_config']
         session["step"] = "email_list"
         await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
@@ -634,9 +640,9 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
         if len(emails) != 5:
             await self.send_message(chat_id, f"Please enter exactly 5 emails. You entered {len(emails)}.")
             return
-            
+
         await self.send_message(chat_id, "Test started for 5 emails...")
-        
+
         # Clear session
         del self.user_sessions[user_id]
 
@@ -657,9 +663,9 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
         user_id = chat_id
         if user_id in self.user_sessions:
             del self.user_sessions[user_id]
-        
+
         result = self.domain_manager.add_bulk_domains(domain_list)
-        
+
         if result["success"]:
             message = f"✅ Bulk import complete!\n"
             message += f"Added: {len(result['added'])} domains\n"
@@ -674,7 +680,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
         user_id = chat_id
         if user_id in self.user_sessions:
             del self.user_sessions[user_id]
-        
+
         if "|" in text:
             parts = text.split("|", 1)
             name = parts[0].strip()
@@ -683,7 +689,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
             # Use domain as both name and URL
             url = text.strip()
             name = url.title()
-        
+
         if self.domain_manager.add_domain(url, name):
             await self.send_message(chat_id, f"✅ Added domain: {name}")
         else:
@@ -694,7 +700,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
         user_id = chat_id
         if user_id in self.user_sessions:
             del self.user_sessions[user_id]
-        
+
         url = text.strip()
         if self.domain_manager.remove_domain(url):
             await self.send_message(chat_id, f"✅ Removed domain: {url}")
@@ -705,7 +711,7 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
         """Run the bot"""
         logger.info("Starting Simple Telegram Email Tester Bot...")
         offset = None
-        
+
         while True:
             try:
                 result = await self.get_updates(offset)
