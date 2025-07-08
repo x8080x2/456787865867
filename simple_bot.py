@@ -160,20 +160,20 @@ class SimpleTelegramBot:
 Use /test to start email testing.
 
 Expected Format:
-server port username password from_email tls_setting recipient_emails...
+server port password username from_email tls_setting recipient_emails...
 
-Example:
-smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
+Examples:
+smtp.mail.me.com 587 app_password username@icloud.com username@icloud.com true recipient1@example.com
 recipient2@example.com
-recipient3@example.com
 
-AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com
+email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true recipient@test.com
 
-For AWS SES:
-- Use SMTP credentials from AWS SES Console → SMTP Settings
-- Sender email must be verified in AWS SES Console → Verified Identities  
-- Username format: AKIA... (SMTP username, not AWS Access Key)"""
+smtp.gmail.com 587 app_password username@gmail.com username@gmail.com true recipient@test.com
+
+Works with any SMTP server:
+- Port 587: Usually requires TLS (set to true)
+- Port 465: Usually requires SSL (set to true)
+- Port 25: Usually no encryption (set to false)"""
         await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
@@ -451,18 +451,22 @@ recipient3@example.com""")
                 if '@' not in prev_word and prev_word.lower() not in ['true', 'false', '1', '0'] and not prev_word.isdigit() and '.' not in prev_word:
                     password = prev_word
 
-        # Determine TLS setting - default to True, especially for common providers
-        tls = True
-        if server and ('mail.me.com' in server or 'icloud' in server.lower()):
-            tls = True  # iCloud requires TLS
-        elif 'gmail' in server.lower() if server else False:
-            tls = True  # Gmail requires TLS
-        else:
-            # Check for explicit TLS setting
-            for word in words:
-                if word.lower() in ['true', 'false', '1', '0']:
-                    tls = word.lower() in ['true', '1']
-                    break
+        # Determine TLS setting - smart defaults based on port
+        tls = True  # Default to True for security
+        if port:
+            port_num = int(port)
+            if port_num == 465:
+                tls = True  # SSL port - will be handled as SSL in email_handler
+            elif port_num == 25:
+                tls = False  # Plain SMTP
+            else:
+                tls = True  # Default to TLS for other ports (587, 2525, etc.)
+        
+        # Check for explicit TLS setting in the input
+        for word in words:
+            if word.lower() in ['true', 'false', '1', '0']:
+                tls = word.lower() in ['true', '1']
+                break
 
         # Build SMTP config if we have minimum required fields
         smtp_config = None
@@ -520,24 +524,10 @@ recipient3@example.com""")
             connection_result = await email_handler.test_connection()
             if not connection_result['success']:
                 error_msg = connection_result['error']
-                if 'amazonaws.com' in smtp_config['server'] and 'Authentication' in error_msg:
-                    await self.send_message(chat_id, f"""❌ AWS SES Authentication Failed
-
-Common fixes:
-1. Verify your SMTP credentials in AWS SES console
-2. Ensure sender email ({smtp_config.get('from_email', smtp_config['username'])}) is verified in AWS SES
-3. Check if you're using correct SMTP username/password (not AWS Access Keys)
-4. Verify your AWS region matches the SMTP endpoint
-
-Error: {error_msg}""")
-                else:
-                    await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
+                await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
                 return
 
-            if 'amazonaws.com' in smtp_config['server']:
-                await self.send_message(chat_id, f"✅ AWS SES connection successful! Sender: {smtp_config.get('from_email', smtp_config['username'])}")
-            else:
-                await self.send_message(chat_id, "✅ SMTP connection successful!")
+            await self.send_message(chat_id, f"✅ SMTP connection successful! Sender: {smtp_config.get('from_email', smtp_config['username'])}")
 
             # Send emails
             result = await email_handler.send_test_emails(emails)

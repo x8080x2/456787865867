@@ -44,39 +44,17 @@ class EmailHandler:
             }
 
     def _test_connection_sync(self) -> Dict[str, Any]:
-        """Fast SMTP connection test with optimized timeout"""
+        """Universal SMTP connection test with optimized timeout"""
         server = None
         try:
-            # Special handling for different SMTP providers
-            if 'amazonaws.com' in self.host or 'aws' in self.host.lower():
-                # AWS SES SMTP
-                if self.port == 465:
-                    server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
-                else:
-                    server = smtplib.SMTP(self.host, self.port, timeout=15)
-                    server.starttls()
-            elif 'mail.me.com' in self.host or 'icloud' in self.host.lower():
-                # iCloud SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=15)
-                server.starttls()
-            elif 'gmail' in self.host.lower():
-                # Gmail SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=15)
-                server.starttls()
-            elif 'outlook' in self.host.lower() or 'hotmail' in self.host.lower():
-                # Outlook/Hotmail SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=15)
-                server.starttls()
-            elif 'yahoo' in self.host.lower():
-                # Yahoo SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=15)
-                server.starttls()
-            elif self.use_ssl or self.port == 465:
-                # SSL connection
+            # Universal SMTP handling based on port and SSL/TLS settings
+            if self.use_ssl or self.port == 465:
+                # SSL connection (port 465 typically uses SSL)
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
             else:
-                # Standard SMTP with optional TLS
+                # Standard SMTP connection
                 server = smtplib.SMTP(self.host, self.port, timeout=15)
+                # Apply TLS if requested
                 if self.use_tls:
                     server.starttls()
 
@@ -138,36 +116,14 @@ class EmailHandler:
         server = None
 
         try:
-            # Establish SMTP connection with timeout
-            if 'amazonaws.com' in self.host or 'aws' in self.host.lower():
-                # AWS SES SMTP
-                if self.port == 465:
-                    server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
-                else:
-                    server = smtplib.SMTP(self.host, self.port, timeout=20)
-                    server.starttls()
-            elif 'mail.me.com' in self.host or 'icloud' in self.host.lower():
-                # iCloud SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=20)
-                server.starttls()
-            elif 'gmail' in self.host.lower():
-                # Gmail SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=20)
-                server.starttls()
-            elif 'outlook' in self.host.lower() or 'hotmail' in self.host.lower():
-                # Outlook/Hotmail SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=20)
-                server.starttls()
-            elif 'yahoo' in self.host.lower():
-                # Yahoo SMTP
-                server = smtplib.SMTP(self.host, self.port, timeout=20)
-                server.starttls()
-            elif self.use_ssl or self.port == 465:
-                # SSL connection
+            # Universal SMTP connection establishment
+            if self.use_ssl or self.port == 465:
+                # SSL connection (port 465 typically uses SSL)
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
             else:
-                # Standard SMTP with optional TLS
+                # Standard SMTP connection
                 server = smtplib.SMTP(self.host, self.port, timeout=20)
+                # Apply TLS if requested
                 if self.use_tls:
                     server.starttls()
 
