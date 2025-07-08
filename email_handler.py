@@ -47,13 +47,28 @@ class EmailHandler:
         """Fast SMTP connection test with optimized timeout"""
         server = None
         try:
-            # Special handling for iCloud SMTP
+            # Special handling for different SMTP providers
             if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+                # iCloud SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=15)
-                server.starttls()  # iCloud requires STARTTLS
+                server.starttls()
+            elif 'gmail' in self.host.lower():
+                # Gmail SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
+                server.starttls()
+            elif 'outlook' in self.host.lower() or 'hotmail' in self.host.lower():
+                # Outlook/Hotmail SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
+                server.starttls()
+            elif 'yahoo' in self.host.lower():
+                # Yahoo SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=15)
+                server.starttls()
             elif self.use_ssl:
+                # SSL connection
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
             else:
+                # Standard SMTP with optional TLS
                 server = smtplib.SMTP(self.host, self.port, timeout=15)
                 if self.use_tls:
                     server.starttls()
@@ -118,11 +133,26 @@ class EmailHandler:
         try:
             # Establish SMTP connection with timeout
             if 'mail.me.com' in self.host or 'icloud' in self.host.lower():
+                # iCloud SMTP
                 server = smtplib.SMTP(self.host, self.port, timeout=20)
-                server.starttls()  # iCloud requires STARTTLS
+                server.starttls()
+            elif 'gmail' in self.host.lower():
+                # Gmail SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=20)
+                server.starttls()
+            elif 'outlook' in self.host.lower() or 'hotmail' in self.host.lower():
+                # Outlook/Hotmail SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=20)
+                server.starttls()
+            elif 'yahoo' in self.host.lower():
+                # Yahoo SMTP
+                server = smtplib.SMTP(self.host, self.port, timeout=20)
+                server.starttls()
             elif self.use_ssl:
+                # SSL connection
                 server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
             else:
+                # Standard SMTP with optional TLS
                 server = smtplib.SMTP(self.host, self.port, timeout=20)
                 if self.use_tls:
                     server.starttls()
