@@ -514,7 +514,19 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
             await self.send_message(chat_id, "🔄 Testing SMTP connection...")
             connection_result = await email_handler.test_connection()
             if not connection_result['success']:
-                await self.send_message(chat_id, f"❌ Connection failed: {connection_result['error']}")
+                error_msg = connection_result['error']
+                if 'amazonaws.com' in smtp_config['server'] and 'Authentication' in error_msg:
+                    await self.send_message(chat_id, f"""❌ AWS SES Authentication Failed
+
+Common fixes:
+1. Verify your SMTP credentials in AWS SES console
+2. Ensure sender email ({smtp_config.get('from_email', smtp_config['username'])}) is verified in AWS SES
+3. Check if you're using correct SMTP username/password (not AWS Access Keys)
+4. Verify your AWS region matches the SMTP endpoint
+
+Error: {error_msg}""")
+                else:
+                    await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
                 return
             
             await self.send_message(chat_id, "✅ SMTP connection successful!")
