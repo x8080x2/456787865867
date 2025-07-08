@@ -108,6 +108,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **July 08, 2025**: Fixed SMTP Parsing Logic for Space-Separated Format
+  - ✓ Fixed password detection to look BEFORE username instead of after (format: server port username password from_email tls)
+  - ✓ Updated all parsing methods to use unified smart parsing with dictionary return format
+  - ✓ Added comprehensive AWS SES SMTP support with proper connection handling
+  - ✓ Removed old colon-separated parsing format that was causing "Invalid SMTP format" errors
+  - ✓ Enhanced error messages with correct format examples for space-separated input
+  - **Fix**: Parsing now correctly handles user's preferred format: "server port username password from_email tls recipient_emails"
+
 - **July 08, 2025**: Enhanced SMTP Configuration with Custom From Email Support
   - ✓ Added from_email field to SMTP configuration allowing separate sender and authentication emails
   - ✓ Updated email handler to use custom from_email when provided, fallback to username

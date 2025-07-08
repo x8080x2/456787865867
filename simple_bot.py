@@ -439,12 +439,12 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
                     username_index = i
                     break
             
-            # Look for password after username (should be the next non-email, non-boolean word)
-            if username_index >= 0 and username_index + 1 < len(words):
-                next_word = words[username_index + 1]
-                # Password should be the word immediately after username
-                if '@' not in next_word and next_word.lower() not in ['true', 'false', '1', '0'] and not next_word.isdigit():
-                    password = next_word
+            # Look for password before username (should be the word immediately before the first email)
+            if username_index >= 1:
+                prev_word = words[username_index - 1]
+                # Password should be the word immediately before username
+                if '@' not in prev_word and prev_word.lower() not in ['true', 'false', '1', '0'] and not prev_word.isdigit() and '.' not in prev_word:
+                    password = prev_word
         
         # Determine TLS setting - default to True, especially for common providers
         tls = True
@@ -511,10 +511,13 @@ email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@ver
             email_handler = EmailHandler(config, domain_url)
             
             # Test connection first
+            await self.send_message(chat_id, "🔄 Testing SMTP connection...")
             connection_result = await email_handler.test_connection()
             if not connection_result['success']:
                 await self.send_message(chat_id, f"❌ Connection failed: {connection_result['error']}")
                 return
+            
+            await self.send_message(chat_id, "✅ SMTP connection successful!")
             
             # Send emails
             result = await email_handler.send_test_emails(emails)
