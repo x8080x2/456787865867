@@ -331,16 +331,13 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
 Required Format (6 parameters + recipient emails):
-server port username password from_email tls_setting
+server port password username from_email tls_setting
 
 Example:
-smtp.mail.me.com 587 user@icloud.com password user@icloud.com true
-recipient@test.com
-
-AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
+email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
 DANW@e-mc7.com
-gjunca@aquatherm.lat""")
+gjunca@aquatherm.lat
+ana@specialtyofficeproduct.com""")
             return
 
         if not emails:
@@ -613,16 +610,13 @@ Error: {error_msg}""")
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
 Required Format (6 parameters + recipient emails):
-server port username password from_email tls_setting
+server port password username from_email tls_setting
 
 Example:
-smtp.mail.me.com 587 user@icloud.com password user@icloud.com true
-recipient@test.com
-
-AWS SES Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
+email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
 DANW@e-mc7.com
-gjunca@aquatherm.lat""")
+gjunca@aquatherm.lat
+ana@specialtyofficeproduct.com""")
             return
 
         session["smtp_config"] = parsed_result['smtp_config']
