@@ -159,14 +159,13 @@ class SimpleTelegramBot:
 
 Use /test to start email testing.
 
-SMTP Configuration Format:
-server port username password [from_email] [recipients...]
+Expected Format:
+server port username password from_email tls_setting recipient_emails...
 
-Examples:
-• smtp.gmail.com 587 user@gmail.com pass123 to1@test.com to2@test.com
-• smtp.outlook.com 587 user@outlook.com pass123 sender@custom.com recipient@test.com
-
-The from_email field is optional. If not provided, username will be used as sender."""
+Example:
+smtp.mail.me.com 587 aristoblisdrlevan@icloud.com buoo-nvam-psex-zmaw aristoblisdrlevan@icloud.com true DANW@e-mc7.com
+gjunca@aquatherm.lat
+ana@specialtyofficeproduct.com"""
         await self.send_message(chat_id, message, auto_delete=False)
 
     async def show_domain_selection(self, chat_id):
@@ -254,17 +253,16 @@ The from_email field is optional. If not provided, username will be used as send
             "domain_url": domain_url
         }
         
-        await self.send_message(chat_id, """Enter SMTP details and 1-5 emails in any format you prefer:
-SMTPserver PORT USER PASS SSL
-Email1 Email2 Email3 Email4 Email5
+        await self.send_message(chat_id, """Enter SMTP details and recipient emails:
 
-Sample format:
-smtp.mail.me.com 587 user@icloud.com pass123 sender@custom.com true
-recipient1@test.com
-recipient2@test.com
+Format: server port username password from_email tls_setting recipient_emails...
 
-Your format: server port username password from_email tls_setting
-Then list recipient emails (one per line)""", auto_delete=False)
+Sample:
+smtp.mail.me.com 587 aristoblisdrlevan@icloud.com buoo-nvam-psex-zmaw aristoblisdrlevan@icloud.com true DANW@e-mc7.com
+gjunca@aquatherm.lat
+ana@specialtyofficeproduct.com
+
+You can put recipient emails on the same line or separate lines.""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
