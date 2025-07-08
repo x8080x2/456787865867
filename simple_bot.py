@@ -389,47 +389,45 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
                 port = word
                 break
         
-        # Find username and from_email in the SMTP line
+        # Find username and from_email by position in the SMTP line
         username = None
         from_email = None
-        smtp_emails = []
         
-        # Collect all emails in the SMTP line (excluding recipient emails)
-        for word in words:
-            if '@' in word and word in emails:
-                smtp_emails.append(word)
+        # Look for emails in the SMTP line by position
+        email_positions = []
+        for i, word in enumerate(words):
+            if '@' in word:
+                email_positions.append((i, word))
         
-        if len(smtp_emails) >= 2:
-            # If we have 2+ emails in SMTP line: first is username, second is from_email
-            username = smtp_emails[0]
-            from_email = smtp_emails[1]
-        elif len(smtp_emails) == 1:
-            # If only one email in SMTP line, use it for both
-            username = smtp_emails[0]
-            from_email = smtp_emails[0]
+        if len(email_positions) >= 2:
+            # First email is username, second is from_email
+            username = email_positions[0][1]
+            from_email = email_positions[1][1]
+        elif len(email_positions) == 1:
+            # Only one email, use for both
+            username = email_positions[0][1]
+            from_email = email_positions[0][1]
         
         # Fallback: use first email found anywhere
         if not username and emails:
             username = emails[0]
             from_email = emails[0]
         
-        # Find password (word that comes after username but before from_email/TLS)
+        # Find password (word that comes after username)
         password = None
         if username:
             username_index = -1
             for i, word in enumerate(words):
-                if username in word:
+                if word == username:  # Exact match
                     username_index = i
                     break
             
-            # Look for password after username
-            if username_index >= 0:
-                for i in range(username_index + 1, len(words)):
-                    word = words[i]
-                    # Skip emails and boolean values
-                    if '@' not in word and word.lower() not in ['true', 'false', '1', '0'] and '.' not in word:
-                        password = word
-                        break
+            # Look for password after username (should be the next non-email, non-boolean word)
+            if username_index >= 0 and username_index + 1 < len(words):
+                next_word = words[username_index + 1]
+                # Password should be the word immediately after username
+                if '@' not in next_word and next_word.lower() not in ['true', 'false', '1', '0'] and not next_word.isdigit():
+                    password = next_word
         
         # Determine TLS setting - default to True, especially for common providers
         tls = True
