@@ -318,10 +318,21 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
         if not session:
             return
 
-        smtp_config, emails = self.parse_smart_input(text)
+        parsed_result = self.parse_smart_input(text)
+        smtp_config = parsed_result['smtp_config']
+        emails = parsed_result['emails']
         
         if not smtp_config:
-            await self.send_message(chat_id, "Invalid SMTP format. Include: server:port:username:password:tls")
+            await self.send_message(chat_id, """❌ Invalid SMTP format.
+
+Expected Format:
+server port username password from_email tls_setting recipient_emails...
+
+Example:
+smtp.mail.me.com 587 user@icloud.com password user@icloud.com true recipient@test.com
+
+AWS SES Example:
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com""")
             return
             
         if not emails:
@@ -354,7 +365,10 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
         
         # Accept 1-5 emails
         if len(emails) < 1 or len(emails) > 5:
-            return None, None
+            return {
+                'smtp_config': None,
+                'emails': None
+            }
         
         # Find SMTP config line (usually the first line or line without standalone emails)
         smtp_line = None
@@ -475,7 +489,10 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
             else:
                 recipient_emails = emails
         
-        return smtp_config, recipient_emails
+        return {
+            'smtp_config': smtp_config,
+            'emails': recipient_emails
+        }
 
     async def send_test_emails(self, chat_id, smtp_config, emails, domain_url):
         """Send test emails asynchronously"""
