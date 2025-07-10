@@ -9,7 +9,6 @@ import logging
 import httpx
 import os
 from email_handler import EmailHandler
-from validators import validate_email_list, validate_smtp_config
 from config import Config
 from domain_manager import DomainManager
 
@@ -613,22 +612,7 @@ recipient3@example.com""")
         session["step"] = "email_list"
         await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
 
-    async def handle_email_list(self, chat_id, text):
-        """Handle email list input"""
-        user_id = chat_id
-        session = self.user_sessions.get(user_id)
-        if not session:
-            return
-
-        emails = [email.strip() for email in text.split(",")]
-        if len(emails) != 5:
-            await self.send_message(chat_id, f"Please enter exactly 5 emails. You entered {len(emails)}.")
-            return
-
-        await self.send_message(chat_id, "Test started for 5 emails...")
-
-        # Clear session
-        del self.user_sessions[user_id]
+    
 
     async def send_domains_list(self, chat_id):
         """Send list of domains"""
