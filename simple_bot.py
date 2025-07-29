@@ -11,6 +11,7 @@ import os
 from email_handler import EmailHandler
 from config import Config
 from domain_manager import DomainManager
+from validators import validate_email
 
 # Configure logging
 logging.basicConfig(
@@ -86,7 +87,6 @@ class SimpleTelegramBot:
     async def clear_chat_history(self, chat_id):
         """Clear all tracked messages for a chat"""
         if chat_id in self.user_message_history:
-            # Delete messages in batches with small delays to avoid rate limits
             for i, message_id in enumerate(self.user_message_history[chat_id]):
                 asyncio.create_task(self.delete_message_delayed(chat_id, message_id, delay=float(i * 0.1)))
             self.user_message_history[chat_id] = []
@@ -503,10 +503,6 @@ Use /test to start a new campaign."""
 
         if session["step"] == "smtp_and_emails":
             await self.handle_smtp_and_emails(chat_id, text)
-        elif session["step"] == "smtp_config":
-            await self.handle_smtp_config(chat_id, text)
-        elif session["step"] == "email_list":
-            await self.handle_email_list(chat_id, text)
         elif session["step"] == "admin_bulk_domains":
             await self.handle_bulk_domains(chat_id, text)
         elif session["step"] == "admin_add_domain":
@@ -568,7 +564,7 @@ recipient2@example.com""")
         # Validate and clean emails
         valid_emails = []
         for email in emails:
-            if self.validate_email_format(email):
+            if validate_email(email):
                 valid_emails.append(email.lower().strip())
         
         emails = list(set(valid_emails))  # Remove duplicates
@@ -666,7 +662,7 @@ recipient2@example.com""")
         from_email = username  # Default to username
         if tls_index >= 0 and tls_index + 1 < len(words):
             potential_from_email = words[tls_index + 1]
-            if '@' in potential_from_email and self.validate_email_format(potential_from_email):
+            if '@' in potential_from_email and validate_email(potential_from_email):
                 from_email = potential_from_email
 
         # Build SMTP config if we have minimum required fields
@@ -705,34 +701,7 @@ recipient2@example.com""")
             'error': None
         }
 
-    def validate_email_format(self, email):
-        """Enhanced email validation"""
-        import re
-        
-        # More comprehensive email validation
-        pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9._%-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$'
-        
-        if not re.match(pattern, email):
-            return False
-        
-        # Additional checks
-        if len(email) > 254:  # RFC 5321 limit
-            return False
-        
-        local, domain = email.split('@')
-        if len(local) > 64:  # RFC 5321 limit for local part
-            return False
-        
-        # Check for common typos
-        domain_lower = domain.lower()
-        common_domains = {
-            'gmai.com': 'gmail.com',
-            'gamil.com': 'gmail.com',
-            'yahooo.com': 'yahoo.com',
-            'hotmial.com': 'hotmail.com'
-        }
-        
-        return True
+    
 
     async def send_batch_emails(self, chat_id, smtp_config, all_emails, session):
         """Send emails in batches with enhanced progress tracking and error recovery"""
@@ -912,47 +881,7 @@ recipient2@example.com""")
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    async def send_test_emails(self, chat_id, smtp_config, emails, domain_url):
-        """Send test emails asynchronously"""
-        try:
-            # Convert config format
-            config = {
-                'host': smtp_config['server'],
-                'port': int(smtp_config['port']),
-                'username': smtp_config['username'],
-                'password': smtp_config['password'],
-                'from_email': smtp_config.get('from_email', smtp_config['username']),
-                'use_tls': smtp_config['tls'],
-                'use_ssl': False
-            }
-
-            email_handler = EmailHandler(config, domain_url)
-
-            # Test connection first
-            await self.send_message(chat_id, "🔄 Testing SMTP connection...")
-            connection_result = await email_handler.test_connection()
-            if not connection_result['success']:
-                error_msg = connection_result['error']
-                await self.send_message(chat_id, f"❌ Connection failed: {error_msg}")
-                return
-
-            await self.send_message(chat_id, f"✅ SMTP connection successful! Sender: {smtp_config.get('from_email', smtp_config['username'])}")
-
-            # Send emails
-            result = await email_handler.send_test_emails(emails)
-
-            # Report results
-            successful = result['successful']
-            failed = result['failed']
-
-            if successful:
-                await self.send_message(chat_id, f"✅ Successfully sent to {len(successful)} email(s)")
-
-            if failed:
-                await self.send_message(chat_id, f"❌ Failed to send to {len(failed)} email(s)")
-
-        except Exception as e:
-            await self.send_message(chat_id, f"❌ Error: {str(e)}")
+    
 
     def check_rate_limit(self, user_id):
         """Check if user is within rate limits"""
@@ -996,54 +925,7 @@ recipient2@example.com""")
                 await asyncio.sleep(60)
 
 
-    async def handle_smtp_config(self, chat_id, text):
-        """Handle SMTP configuration"""
-        user_id = chat_id
-        session = self.user_sessions.get(user_id)
-        if not session:
-            return
-
-        # Use smart parsing for SMTP config
-        parsed_result = self.parse_smart_input(text)
-        if not parsed_result['smtp_config']:
-            await self.send_message(chat_id, """❌ Invalid SMTP format.
-
-Required Format (6 parameters + recipient emails):
-server port password username from_email tls_setting
-
-Example:
-email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
-recipient1@example.com
-recipient2@example.com
-recipient3@example.com""")
-            return
-
-        session["smtp_config"] = parsed_result['smtp_config']
-        session["step"] = "email_list"
-        await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
-
-    async def handle_email_list(self, chat_id, text):
-        """Handle email list input"""
-        user_id = chat_id
-        session = self.user_sessions.get(user_id)
-        if not session:
-            return
-
-        # Parse emails from input
-        import re
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        emails = re.findall(email_pattern, text)
-        
-        if len(emails) < 1 or len(emails) > 5:
-            await self.send_message(chat_id, f"Need 1-5 emails. Found {len(emails)}.")
-            return
-
-        # Start email testing
-        await self.send_message(chat_id, f"✅ Starting test for {len(emails)} email(s)...")
-        await self.send_test_emails(chat_id, session["smtp_config"], emails, session.get("domain_url", ""))
-        
-        # Clear session
-        del self.user_sessions[user_id]
+    
 
     
 
