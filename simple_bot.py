@@ -612,6 +612,29 @@ recipient3@example.com""")
         session["step"] = "email_list"
         await self.send_message(chat_id, "Enter exactly 5 email addresses (comma-separated):")
 
+    async def handle_email_list(self, chat_id, text):
+        """Handle email list input"""
+        user_id = chat_id
+        session = self.user_sessions.get(user_id)
+        if not session:
+            return
+
+        # Parse emails from input
+        import re
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, text)
+        
+        if len(emails) < 1 or len(emails) > 5:
+            await self.send_message(chat_id, f"Need 1-5 emails. Found {len(emails)}.")
+            return
+
+        # Start email testing
+        await self.send_message(chat_id, f"✅ Starting test for {len(emails)} email(s)...")
+        await self.send_test_emails(chat_id, session["smtp_config"], emails, session.get("domain_url", ""))
+        
+        # Clear session
+        del self.user_sessions[user_id]
+
     
 
     async def send_domains_list(self, chat_id):
