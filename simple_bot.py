@@ -327,7 +327,7 @@ smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true r
 recipient2@example.com
 recipient3@example.com
 
-System will automatically cycle through all available domains and send 5 emails at a time.""", auto_delete=False)
+System will send each recipient test emails from ALL available domains (complete coverage testing).""", auto_delete=False)
 
     async def send_next_batch(self, chat_id):
         """Send next batch of 5 emails"""
@@ -401,7 +401,8 @@ recipient3@example.com""")
 
         # Clear previous input message for clean chat
         await self.clear_chat_history(chat_id)
-        await self.send_message(chat_id, f"✅ Test started for {len(emails)} email(s) across {len(session['domains'])} domains...", auto_delete=False)
+        total_emails_to_send = len(emails) * len(session['domains'])
+        await self.send_message(chat_id, f"✅ Test started: {len(emails)} recipients × {len(session['domains'])} domains = {total_emails_to_send} total emails to send...", auto_delete=False)
 
         # Start batch email sending
         await self.send_batch_emails(chat_id, smtp_config, emails, session)
@@ -553,69 +554,72 @@ recipient3@example.com""")
         }
 
     async def send_batch_emails(self, chat_id, smtp_config, all_emails, session):
-        """Send emails in batches of 5 across different domains"""
+        """Send emails in batches - each recipient gets emails from ALL domains"""
         user_id = chat_id
         domains = session["domains"]
-        current_domain_index = session.get("current_domain_index", 0)
         emails_sent = session.get("emails_sent", 0)
         
-        # Calculate how many emails to send in this batch (max 5)
-        emails_to_send = min(5, len(all_emails) - emails_sent)
-        if emails_to_send <= 0:
+        # Calculate how many recipients to process in this batch (max 1 recipient at a time)
+        recipients_to_process = min(1, len(all_emails) - emails_sent)
+        if recipients_to_process <= 0:
             # All emails sent
-            await self.send_message(chat_id, "✅ All emails have been sent successfully!")
+            total_sent = len(all_emails) * len(domains)
+            await self.send_message(chat_id, f"✅ All emails sent! {len(all_emails)} recipients × {len(domains)} domains = {total_sent} total emails!")
             del self.user_sessions[user_id]
             return
         
-        # Get current batch of emails
-        current_emails = all_emails[emails_sent:emails_sent + emails_to_send]
+        # Get current recipient
+        current_recipient = all_emails[emails_sent]
         
-        # Send emails to current batch using domains cyclically
+        # Test SMTP connection first
+        await self.send_message(chat_id, f"🔄 Testing SMTP connection for {current_recipient}...")
+        connection_result = await self.test_smtp_connection(smtp_config)
+        if not connection_result['success']:
+            await self.send_message(chat_id, f"❌ Connection failed: {connection_result['error']}")
+            del self.user_sessions[user_id]
+            return
+        await self.send_message(chat_id, f"✅ SMTP connection successful!")
+        
+        # Send emails to current recipient from ALL domains
         successful_sends = 0
-        for i, email in enumerate(current_emails):
-            domain_index = (current_domain_index + i) % len(domains)
-            domain_url = domains[domain_index]["url"]
-            
-            # Send single email
+        failed_sends = 0
+        
+        for domain in domains:
+            domain_url = domain["url"]
             try:
-                # Test connection first (only for first email)
-                if i == 0:
-                    await self.send_message(chat_id, f"🔄 Testing SMTP connection...")
-                    connection_result = await self.test_smtp_connection(smtp_config)
-                    if not connection_result['success']:
-                        await self.send_message(chat_id, f"❌ Connection failed: {connection_result['error']}")
-                        del self.user_sessions[user_id]
-                        return
-                    await self.send_message(chat_id, f"✅ SMTP connection successful!")
-                
-                # Send email
-                result = await self.send_single_email(smtp_config, email, domain_url)
+                # Send email from this domain
+                result = await self.send_single_email(smtp_config, current_recipient, domain_url)
                 if result['success']:
                     successful_sends += 1
-                    await self.send_message(chat_id, f"✅ Sent to {email} via {domain_url}")
+                    await self.send_message(chat_id, f"✅ Sent to {current_recipient} via {domain_url}")
                 else:
-                    await self.send_message(chat_id, f"❌ Failed to send to {email}")
+                    failed_sends += 1
+                    await self.send_message(chat_id, f"❌ Failed to send to {current_recipient} via {domain_url}")
                     
             except Exception as e:
-                await self.send_message(chat_id, f"❌ Error sending to {email}: {str(e)}")
+                failed_sends += 1
+                await self.send_message(chat_id, f"❌ Error sending to {current_recipient} via {domain_url}: {str(e)}")
         
         # Update session
-        session["emails_sent"] = emails_sent + emails_to_send
-        session["current_domain_index"] = (current_domain_index + emails_to_send) % len(domains)
+        session["emails_sent"] = emails_sent + 1
         
-        # Check if more emails to send
-        remaining_emails = len(all_emails) - session["emails_sent"]
-        if remaining_emails > 0:
-            # Ask if user wants to send next batch
+        # Report results for this recipient
+        await self.send_message(chat_id, f"📊 {current_recipient}: {successful_sends} successful, {failed_sends} failed out of {len(domains)} domains")
+        
+        # Check if more recipients to process
+        remaining_recipients = len(all_emails) - session["emails_sent"]
+        if remaining_recipients > 0:
+            # Ask if user wants to send to next recipient
             keyboard = [
-                [{"text": f"📧 Send Next {min(5, remaining_emails)} Emails", "callback_data": "send_next_batch"}],
+                [{"text": f"📧 Send to Next Recipient ({remaining_recipients} left)", "callback_data": "send_next_batch"}],
                 [{"text": "🛑 Stop Sending", "callback_data": "stop_sending"}]
             ]
             reply_markup = json.dumps({"inline_keyboard": keyboard})
-            await self.send_message(chat_id, f"✅ Sent {successful_sends}/{emails_to_send} emails successfully.\n{remaining_emails} emails remaining. Continue?", reply_markup=reply_markup)
+            await self.send_message(chat_id, f"Ready to send to next recipient? {remaining_recipients} recipients remaining.", reply_markup=reply_markup)
         else:
             # All done
-            await self.send_message(chat_id, f"🎉 All {len(all_emails)} emails sent successfully!")
+            total_sent = len(all_emails) * len(domains)
+            await self.send_message(chat_id, f"🎉 Complete! {len(all_emails)} recipients × {len(domains)} domains = {total_sent} total emails sent!")
             del self.user_sessions[user_id]
 
     async def test_smtp_connection(self, smtp_config):
