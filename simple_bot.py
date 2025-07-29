@@ -169,26 +169,33 @@ class SimpleTelegramBot:
 4. Get detailed delivery reports
 
 📝 **Input Format:**
-`server port username password from_email tls_setting recipient_emails...`
+`server port username password tls_setting [from_email] recipient_emails...`
 
 🎯 **Examples:**
 
-**Gmail:**
+**Gmail (simple):**
 ```
-smtp.gmail.com 587 user@gmail.com app_password user@gmail.com true
+smtp.gmail.com 587 user@gmail.com app_password true
+recipient1@test.com
+recipient2@test.com
+```
+
+**Gmail (with custom from_email):**
+```
+smtp.gmail.com 587 user@gmail.com app_password true sender@company.com
 recipient1@test.com
 recipient2@test.com
 ```
 
 **AWS SES:**
 ```
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY sender@verified.com true
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey true sender@verified.com
 recipient@test.com
 ```
 
 **iCloud:**
 ```
-smtp.mail.me.com 587 user@icloud.com app_password user@icloud.com true
+smtp.mail.me.com 587 user@icloud.com app_password true
 test1@example.com test2@example.com
 ```
 
@@ -306,13 +313,13 @@ Need help? Just ask! 🤖"""
             "domain_url": domain_url
         }
 
-        await self.send_message(chat_id, """Enter SMTP details & Leads emails:
+        await self.send_message(chat_id, """Enter SMTP details & recipient emails:
 
-Format: smtp.mail.me.com 587 user@icloud.com password true fromemail
+Format: smtp.mail.me.com 587 user@icloud.com password true [from_email]
 eu2@eeu.jp
 dassola8080@gmail.com
 
-You can put recipient emails on the same line or separate lines.""", auto_delete=False)
+Note: from_email is optional and comes after 'true'.""", auto_delete=False)
 
     async def handle_admin_action(self, chat_id, action):
         """Handle admin actions"""
@@ -359,11 +366,11 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
 
         await self.send_message(chat_id, """Enter SMTP details and recipient emails:
 
-Format: smtp.mail.me.com 587 user@icloud.com password true fromemail 
+Format: smtp.mail.me.com 587 user@icloud.com password true [from_email]
 eu2@eeu.jp
 dassola8080@gmail.com
 
-System will send each recipient test emails from ALL available domains (complete coverage testing).""", auto_delete=False)
+Note: from_email is optional and comes after 'true'. System will send test emails from ALL domains to ALL recipients.""", auto_delete=False)
 
     async def send_next_batch(self, chat_id):
         """Send next batch of 5 emails"""
@@ -521,14 +528,14 @@ Use /test to start a new campaign."""
         if not smtp_config:
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
-Required Format (6 parameters + recipient emails):
-server port username password from_email tls_setting
+Required Format (5-6 parameters + recipient emails):
+server port username password tls_setting [from_email]
 
-Example:
-email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
+Examples:
+smtp.gmail.com 587 user@gmail.com password true
+smtp.gmail.com 587 user@gmail.com password true sender@company.com
 recipient1@example.com
-recipient2@example.com
-recipient3@example.com""")
+recipient2@example.com""")
             return
 
         if not emails:
@@ -609,29 +616,16 @@ recipient3@example.com""")
                 port = word
                 break
 
-        # Find username and from_email by position in the SMTP line
+        # Find username (first email in SMTP line)
         username = None
-        from_email = None
-
-        # Look for emails in the SMTP line by position
-        email_positions = []
-        for i, word in enumerate(words):
+        for word in words:
             if '@' in word:
-                email_positions.append((i, word))
-
-        if len(email_positions) >= 2:
-            # First email is username, second is from_email
-            username = email_positions[0][1]
-            from_email = email_positions[1][1]
-        elif len(email_positions) == 1:
-            # Only one email, use for both
-            username = email_positions[0][1]
-            from_email = email_positions[0][1]
+                username = word
+                break
 
         # Fallback: use first email found anywhere
         if not username and emails:
             username = emails[0]
-            from_email = emails[0]
 
         # Find password (word that comes after username)
         password = None
@@ -661,10 +655,19 @@ recipient3@example.com""")
                 tls = True  # Default to TLS for other ports (587, 2525, etc.)
         
         # Check for explicit TLS setting in the input
-        for word in words:
+        tls_index = -1
+        for i, word in enumerate(words):
             if word.lower() in ['true', 'false', '1', '0']:
                 tls = word.lower() in ['true', '1']
+                tls_index = i
                 break
+
+        # Find from_email (optional email after TLS setting)
+        from_email = username  # Default to username
+        if tls_index >= 0 and tls_index + 1 < len(words):
+            potential_from_email = words[tls_index + 1]
+            if '@' in potential_from_email and self.validate_email_format(potential_from_email):
+                from_email = potential_from_email
 
         # Build SMTP config if we have minimum required fields
         smtp_config = None
