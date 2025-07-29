@@ -743,10 +743,8 @@ recipient3@example.com""")
         domains = session["domains"]
         
         # Initialize session tracking with comprehensive stats
-        if "current_recipient_index" not in session:
-            session["current_recipient_index"] = 0
-        if "current_domain_index" not in session:
-            session["current_domain_index"] = 0
+        if "current_domain_batch" not in session:
+            session["current_domain_batch"] = 0  # Track which batch of 5 domains we're on
         if "total_successful" not in session:
             session["total_successful"] = 0
         if "total_failed" not in session:
@@ -755,11 +753,12 @@ recipient3@example.com""")
             import time
             session["start_time"] = time.time()
         
-        current_recipient_index = session["current_recipient_index"]
-        current_domain_index = session["current_domain_index"]
+        current_domain_batch = session["current_domain_batch"]
+        domains_per_batch = 5
         
-        # Check if all emails are sent
-        if current_recipient_index >= len(all_emails):
+        # Check if all domain batches are sent
+        total_domain_batches = (len(domains) + domains_per_batch - 1) // domains_per_batch
+        if current_domain_batch >= total_domain_batches:
             import time
             elapsed = time.time() - session["start_time"]
             total_sent = len(all_emails) * len(domains)
@@ -781,112 +780,99 @@ recipient3@example.com""")
             await self.send_message(chat_id, final_report, auto_delete=False)
             del self.user_sessions[user_id]
             return
-        
-        current_recipient = all_emails[current_recipient_index]
-        
-        # Test SMTP connection on first domain for each recipient with retry logic
-        if current_domain_index == 0:
-            progress_msg = f"🔄 [{current_recipient_index + 1}/{len(all_emails)}] Testing SMTP for {current_recipient}..."
-            await self.send_message(chat_id, progress_msg)
-            
-            # Connection retry logic
-            max_retries = 2
-            for attempt in range(max_retries):
-                connection_result = await self.test_smtp_connection(smtp_config)
-                if connection_result['success']:
-                    await self.send_message(chat_id, f"✅ SMTP connection established!")
-                    break
-                elif attempt < max_retries - 1:
-                    await self.send_message(chat_id, f"⚠️ Connection attempt {attempt + 1} failed, retrying...")
-                    await asyncio.sleep(2)
-                else:
-                    error_msg = f"❌ SMTP connection failed after {max_retries} attempts: {connection_result['error']}"
-                    await self.send_message(chat_id, error_msg)
-                    del self.user_sessions[user_id]
-                    return
-        
-        # Send emails for up to 5 domains with parallel processing
-        successful_sends = 0
-        failed_sends = 0
-        domains_to_send = min(5, len(domains) - current_domain_index)
+
+        # Test SMTP connection once per batch
+        if current_domain_batch == 0:
+            connection_result = await self.test_smtp_connection(smtp_config)
+            if not connection_result['success']:
+                error_msg = f"❌ SMTP connection failed: {connection_result['error']}"
+                await self.send_message(chat_id, error_msg)
+                del self.user_sessions[user_id]
+                return
+            await self.send_message(chat_id, "✅ SMTP connection established!")
+
+        # Calculate which domains to send in this batch
+        start_domain_index = current_domain_batch * domains_per_batch
+        end_domain_index = min(start_domain_index + domains_per_batch, len(domains))
+        domains_in_batch = domains[start_domain_index:end_domain_index]
         
         # Progress indicator
-        total_progress = (current_recipient_index * len(domains) + current_domain_index) / (len(all_emails) * len(domains)) * 100
-        progress_bar = "▓" * int(total_progress / 5) + "░" * (20 - int(total_progress / 5))
+        batch_progress = (current_domain_batch / total_domain_batches * 100)
+        progress_bar = "▓" * int(batch_progress / 5) + "░" * (20 - int(batch_progress / 5))
         
-        await self.send_message(chat_id, f"📤 Sending batch for {current_recipient}...\n[{progress_bar}] {total_progress:.1f}%")
+        await self.send_message(chat_id, f"📤 Sending batch {current_domain_batch + 1}/{total_domain_batches} ({len(domains_in_batch)} domains) to {len(all_emails)} recipients...\n[{progress_bar}] {batch_progress:.1f}%")
         
-        # Process domains with better error handling
-        domain_results = []
-        for i in range(domains_to_send):
-            domain = domains[current_domain_index + i]
-            domain_url = domain["url"]
-            try:
-                result = await self.send_single_email(smtp_config, current_recipient, domain_url)
-                if result['success']:
-                    successful_sends += 1
-                    domain_results.append(f"✅ {domain_url}")
-                else:
-                    failed_sends += 1
-                    domain_results.append(f"❌ {domain_url}: {result.get('error', 'Unknown error')[:50]}")
-                    
-            except Exception as e:
-                failed_sends += 1
-                domain_results.append(f"❌ {domain_url}: {str(e)[:50]}")
+        # Send emails to ALL recipients for the current domain batch
+        batch_successful = 0
+        batch_failed = 0
+        recipient_results = []
+        
+        for recipient_email in all_emails:
+            recipient_success = 0
+            recipient_failures = 0
+            domain_results = []
+            
+            for domain in domains_in_batch:
+                domain_url = domain["url"]
+                try:
+                    result = await self.send_single_email(smtp_config, recipient_email, domain_url)
+                    if result['success']:
+                        recipient_success += 1
+                        batch_successful += 1
+                        domain_results.append(f"✅ {domain_url}")
+                    else:
+                        recipient_failures += 1
+                        batch_failed += 1
+                        domain_results.append(f"❌ {domain_url}")
+                        
+                except Exception as e:
+                    recipient_failures += 1
+                    batch_failed += 1
+                    domain_results.append(f"❌ {domain_url}")
+            
+            # Track recipient results
+            recipient_rate = (recipient_success / len(domains_in_batch) * 100) if domains_in_batch else 0
+            recipient_results.append(f"📧 {recipient_email}: {recipient_success}/{len(domains_in_batch)} ({recipient_rate:.0f}%)")
         
         # Update session stats
-        session["current_domain_index"] += domains_to_send
-        session["total_successful"] += successful_sends
-        session["total_failed"] += failed_sends
+        session["current_domain_batch"] += 1
+        session["total_successful"] += batch_successful
+        session["total_failed"] += batch_failed
         
-        # Show batch results
-        batch_summary = f"📊 Batch Results for {current_recipient}:\n" + "\n".join(domain_results[:3])
-        if len(domain_results) > 3:
-            batch_summary += f"\n... and {len(domain_results) - 3} more"
+        # Show batch results summary
+        batch_rate = (batch_successful / (len(all_emails) * len(domains_in_batch)) * 100) if (len(all_emails) * len(domains_in_batch)) > 0 else 0
+        batch_summary = f"""📊 **Batch {current_domain_batch}/{total_domain_batches} Results:**
+• Total Sent: {batch_successful + batch_failed}
+• ✅ Successful: {batch_successful}
+• ❌ Failed: {batch_failed}
+• 📈 Batch Success Rate: {batch_rate:.1f}%
+
+**Per Recipient:**
+""" + "\n".join(recipient_results[:5])
+        
+        if len(recipient_results) > 5:
+            batch_summary += f"\n... and {len(recipient_results) - 5} more recipients"
+            
         await self.send_message(chat_id, batch_summary)
         
-        # Check if we've finished all domains for current recipient
-        if session["current_domain_index"] >= len(domains):
-            # Move to next recipient
-            session["current_recipient_index"] += 1
-            session["current_domain_index"] = 0
-            
-            # Recipient completion report
-            recipient_success_rate = (successful_sends / len(domains) * 100) if len(domains) > 0 else 0
-            completion_msg = f"🎯 {current_recipient}: {successful_sends}/{len(domains)} domains completed ({recipient_success_rate:.0f}% success)"
-            await self.send_message(chat_id, completion_msg)
-            
-            # Check if more recipients to process
-            if session["current_recipient_index"] < len(all_emails):
-                remaining_recipients = len(all_emails) - session["current_recipient_index"]
-                overall_progress = (session["current_recipient_index"] / len(all_emails)) * 100
-                
-                keyboard = [
-                    [{"text": f"📧 Continue to Next Recipient ({remaining_recipients} left)", "callback_data": "send_next_batch"}],
-                    [{"text": "📊 View Stats", "callback_data": "show_stats"}],
-                    [{"text": "🛑 Stop Campaign", "callback_data": "stop_sending"}]
-                ]
-                reply_markup = json.dumps({"inline_keyboard": keyboard})
-                
-                progress_msg = f"📈 Campaign Progress: {overall_progress:.1f}% complete\n{remaining_recipients} recipients remaining"
-                await self.send_message(chat_id, progress_msg, reply_markup=reply_markup)
-            else:
-                # All done - final stats already handled above
-                pass
-        else:
-            # More domains to send for current recipient
-            remaining_domains = len(domains) - session["current_domain_index"]
-            recipient_progress = (session["current_domain_index"] / len(domains)) * 100
+        # Check if more batches to send
+        if session["current_domain_batch"] < total_domain_batches:
+            remaining_batches = total_domain_batches - session["current_domain_batch"]
+            remaining_domains = len(domains) - (session["current_domain_batch"] * domains_per_batch)
+            overall_progress = (session["current_domain_batch"] / total_domain_batches * 100)
             
             keyboard = [
-                [{"text": f"📧 Send Next Batch ({remaining_domains} domains left)", "callback_data": "send_next_batch"}],
-                [{"text": "⏭️ Skip to Next Recipient", "callback_data": "skip_recipient"}],
+                [{"text": f"📧 Send Next Batch ({remaining_batches} batches, {remaining_domains} domains left)", "callback_data": "send_next_batch"}],
+                [{"text": "📊 View Stats", "callback_data": "show_stats"}],
                 [{"text": "🛑 Stop Campaign", "callback_data": "stop_sending"}]
             ]
             reply_markup = json.dumps({"inline_keyboard": keyboard})
             
-            progress_msg = f"🎯 {current_recipient}: {recipient_progress:.0f}% complete ({remaining_domains} domains remaining)"
+            progress_msg = f"📈 Campaign Progress: {overall_progress:.1f}% complete\n{remaining_batches} batches remaining ({remaining_domains} domains)"
             await self.send_message(chat_id, progress_msg, reply_markup=reply_markup)
+        else:
+            # All batches complete - this will be handled by the completion check above
+            pass
 
     async def test_smtp_connection(self, smtp_config):
         """Test SMTP connection"""
