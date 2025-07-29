@@ -159,15 +159,15 @@ class SimpleTelegramBot:
 Use /test to start email testing.
 
 Expected Format:
-server port password username from_email tls_setting recipient_emails...
+server port username password from_email tls_setting recipient_emails...
 
 Examples:
-smtp.mail.me.com 587 app_password username@icloud.com username@icloud.com true recipient1@example.com
+smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
 recipient2@example.com
 
-email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true recipient@test.com
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true recipient@test.com
 
-smtp.gmail.com 587 app_password username@gmail.com username@gmail.com true recipient@test.com
+smtp.gmail.com 587 username@gmail.com app_password username@gmail.com true recipient@test.com
 
 Works with any SMTP server:
 - Port 587: Usually requires TLS (set to true)
@@ -382,10 +382,10 @@ System will automatically cycle through all available domains and send 5 emails 
             await self.send_message(chat_id, """❌ Invalid SMTP format.
 
 Required Format (6 parameters + recipient emails):
-server port password username from_email tls_setting
+server port username password from_email tls_setting
 
 Example:
-email-smtp.us-east-1.amazonaws.com 587 secretkey AKIAIOSFODNN7EXAMPLE sender@verified.com true
+email-smtp.us-east-1.amazonaws.com 587 AKIAIOSFODNN7EXAMPLE secretkey sender@verified.com true
 recipient1@example.com
 recipient2@example.com
 recipient3@example.com""")
@@ -493,12 +493,12 @@ recipient3@example.com""")
                     username_index = i
                     break
 
-            # Look for password before username (should be the word immediately before the first email)
-            if username_index >= 1:
-                prev_word = words[username_index - 1]
-                # Password should be the word immediately before username
-                if '@' not in prev_word and prev_word.lower() not in ['true', 'false', '1', '0'] and not prev_word.isdigit() and '.' not in prev_word:
-                    password = prev_word
+            # Look for password after username (should be the word immediately after the email)
+            if username_index >= 0 and username_index + 1 < len(words):
+                next_word = words[username_index + 1]
+                # Password should be the word immediately after username
+                if '@' not in next_word and next_word.lower() not in ['true', 'false', '1', '0'] and not next_word.isdigit() and '.' not in next_word:
+                    password = next_word
 
         # Determine TLS setting - smart defaults based on port
         tls = True  # Default to True for security
