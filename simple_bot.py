@@ -561,12 +561,8 @@ recipient3@example.com""")
         lines = [line.strip() for line in text.split('\n') if line.strip()]
 
         # Enhanced email regex pattern for better validation
-        email_pattern = r'\b[A-Za-z0-9]([A-Za-z0-9._%-]*[A-Za-z0-9])?@[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}\b'
+        email_pattern = r'\b[A-Za-z0-9][A-Za-z0-9._%-]*@[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}\b'
         emails = re.findall(email_pattern, text)
-        
-        # Extract just the email addresses from the tuples
-        emails = [match[0] + '@' + match[1] + '.' + match[2] if isinstance(match, tuple) and len(match) > 2 
-                 else match for match in re.findall(r'\b[A-Za-z0-9]([A-Za-z0-9._%-]*[A-Za-z0-9])?@[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}\b', text)]
 
         # Validate and clean emails
         valid_emails = []
