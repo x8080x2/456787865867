@@ -110,51 +110,97 @@ class EmailHandler:
             }
 
     def _send_emails_sync(self, email_list: List[str]) -> Dict[str, Any]:
-        """Optimized synchronous email sending with connection reuse"""
+        """Enhanced email sending with retry logic and better error handling"""
         successful = []
         failed = {}
         server = None
+        max_retries = 2
+
+        def establish_connection():
+            """Establish SMTP connection with retry logic"""
+            for attempt in range(max_retries):
+                try:
+                    if self.use_ssl or self.port == 465:
+                        server = smtplib.SMTP_SSL(self.host, self.port, timeout=25)
+                    else:
+                        server = smtplib.SMTP(self.host, self.port, timeout=25)
+                        if self.use_tls:
+                            server.starttls()
+                    
+                    server.sock.settimeout(20)
+                    server.login(self.username, self.password)
+                    return server
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Connection attempt {attempt + 1} failed, retrying: {e}")
+                        import time
+                        time.sleep(2)
+                    else:
+                        raise e
+            return None
 
         try:
-            # Universal SMTP connection establishment
-            if self.use_ssl or self.port == 465:
-                # SSL connection (port 465 typically uses SSL)
-                server = smtplib.SMTP_SSL(self.host, self.port, timeout=20)
-            else:
-                # Standard SMTP connection
-                server = smtplib.SMTP(self.host, self.port, timeout=20)
-                # Apply TLS if requested
-                if self.use_tls:
-                    server.starttls()
+            server = establish_connection()
+            if not server:
+                raise Exception("Failed to establish SMTP connection")
 
-            # Set timeout for operations
-            server.sock.settimeout(15)
-            server.login(self.username, self.password)
+            # Enhanced batch processing with connection health checks
+            batch_size = 3  # Smaller batches for better reliability
+            connection_age = 0
+            max_connection_age = 10  # Refresh connection after 10 emails
+            
+            for i, email in enumerate(email_list):
+                try:
+                    # Refresh connection periodically for long batches
+                    if connection_age >= max_connection_age and i < len(email_list) - 1:
+                        logger.info("Refreshing SMTP connection for reliability")
+                        server.quit()
+                        server = establish_connection()
+                        connection_age = 0
+                    
+                    message = self._create_test_message(email)
+                    
+                    # Send with retry on temporary failures
+                    sent = False
+                    for attempt in range(2):
+                        try:
+                            server.send_message(message)
+                            successful.append(email)
+                            connection_age += 1
+                            sent = True
+                            logger.info(f"✅ Email sent to {email}")
+                            break
+                        except smtplib.SMTPRecipientsRefused as e:
+                            failed[email] = f"Recipient refused: {str(e)}"
+                            break
+                        except (smtplib.SMTPServerDisconnected, smtplib.SMTPResponseException) as e:
+                            if attempt == 0:
+                                logger.warning(f"Connection issue, retrying for {email}: {e}")
+                                try:
+                                    server = establish_connection()
+                                    connection_age = 0
+                                except:
+                                    failed[email] = f"Connection retry failed: {str(e)}"
+                                    break
+                            else:
+                                failed[email] = f"Send retry failed: {str(e)}"
+                                break
+                        except Exception as e:
+                            failed[email] = f"Send error: {str(e)}"
+                            break
+                    
+                    # Brief pause between emails for server courtesy
+                    if i < len(email_list) - 1 and i % 3 == 2:
+                        import time
+                        time.sleep(0.2)
 
-            # Send emails in batches for better performance
-            batch_size = 5
-            for i in range(0, len(email_list), batch_size):
-                batch = email_list[i:i + batch_size]
-                
-                for email in batch:
-                    try:
-                        message = self._create_test_message(email)
-                        # Use send_message which is more efficient
-                        server.send_message(message)
-                        successful.append(email)
-                        logger.info(f"Email sent to {email}")
-
-                    except Exception as e:
-                        failed[email] = str(e)
-                        logger.error(f"Failed to send to {email}: {e}")
-                
-                # Small delay between batches to avoid overwhelming the server
-                if i + batch_size < len(email_list):
-                    import time
-                    time.sleep(0.1)
+                except Exception as e:
+                    failed[email] = f"Processing error: {str(e)}"
+                    logger.error(f"❌ Failed to process {email}: {e}")
 
         except Exception as e:
-            # If connection fails, mark all remaining emails as failed
+            logger.error(f"Major SMTP error: {e}")
+            # Mark all unsent emails as failed
             for email in email_list:
                 if email not in successful and email not in failed:
                     failed[email] = f"SMTP connection error: {str(e)}"
@@ -165,6 +211,12 @@ class EmailHandler:
                     server.quit()
                 except:
                     pass
+
+        # Log final results
+        total_sent = len(successful)
+        total_failed = len(failed)
+        success_rate = (total_sent / len(email_list) * 100) if email_list else 0
+        logger.info(f"Batch complete: {total_sent} sent, {total_failed} failed ({success_rate:.1f}% success)")
 
         return {
             'successful': successful,
