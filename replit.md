@@ -108,6 +108,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **July 29, 2025**: Enhanced Bot Flow with Auto-Domain Cycling and Batch Processing
+  - ✓ Eliminated manual domain selection step for streamlined user experience
+  - ✓ Implemented automatic domain cycling - system cycles through all available domains
+  - ✓ Added batch email processing - sends 5 emails at a time with continue/stop options
+  - ✓ Enhanced session management to track email progress and domain rotation
+  - ✓ Added interactive buttons for "Send Next 5" and "Stop Sending" functionality
+  - **User Experience**: Simplified flow from SMTP input directly to batch email sending
+  - **Architecture**: Maintained async operations with improved batch processing logic
+
 - **July 29, 2025**: Successfully completed migration from Replit Agent to standard Replit environment
   - ✓ Verified all dependencies installed correctly (httpx, python-telegram-bot, telegram)
   - ✓ Fixed missing `handle_email_list` method in session management
