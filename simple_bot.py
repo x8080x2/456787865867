@@ -306,14 +306,11 @@ Need help? Just ask! 🤖"""
             "domain_url": domain_url
         }
 
-        await self.send_message(chat_id, """Enter SMTP details and recipient emails:
+        await self.send_message(chat_id, """Enter SMTP details & Leads emails:
 
-Format: server port username password from_email tls_setting recipient_emails...
-
-Sample:
-smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
-recipient2@example.com
-recipient3@example.com
+Format: smtp.mail.me.com 587 user@icloud.com password true fromemail
+eu2@eeu.jp
+dassola8080@gmail.com
 
 You can put recipient emails on the same line or separate lines.""", auto_delete=False)
 
@@ -362,12 +359,9 @@ You can put recipient emails on the same line or separate lines.""", auto_delete
 
         await self.send_message(chat_id, """Enter SMTP details and recipient emails:
 
-Format: server port username password from_email tls_setting recipient_emails...
-
-Sample:
-smtp.mail.me.com 587 username@icloud.com app_password username@icloud.com true recipient1@example.com
-recipient2@example.com
-recipient3@example.com
+Format: smtp.mail.me.com 587 user@icloud.com password true fromemail 
+eu2@eeu.jp
+dassola8080@gmail.com
 
 System will send each recipient test emails from ALL available domains (complete coverage testing).""", auto_delete=False)
 
